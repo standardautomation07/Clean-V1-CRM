@@ -12,6 +12,7 @@ import {
 } from 'wouter';
 import { AppShell, SkeletonBlock } from '@/components/crm-ui';
 import { Customers, Dashboard, FollowUps, LeadDetail, Leads, Login, SettingsPage } from '@/pages/crm-pages';
+import { NewEnquiry } from '@/pages/enquiry';
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/leads" component={Leads} />
         <Route path="/leads/:id" component={LeadDetail} />
+        <Route path="/enquiry" component={NewEnquiry} />
         <Route path="/follow-ups" component={FollowUps} />
         <Route path="/customers" component={Customers} />
         <Route path="/settings" component={SettingsPage} />

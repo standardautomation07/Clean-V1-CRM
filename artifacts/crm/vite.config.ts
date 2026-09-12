@@ -27,6 +27,11 @@ if (!basePath) {
   );
 }
 
+// Local development only: Replit routes /api to the API server itself. Off
+// Replit, set API_PROXY_TARGET (e.g. http://127.0.0.1:8080) so the dev server
+// forwards /api requests there.
+const apiProxyTarget = process.env.API_PROXY_TARGET;
+
 export default defineConfig({
   base: basePath,
   plugins: [
@@ -72,6 +77,7 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    ...(apiProxyTarget ? { proxy: { '/api': { target: apiProxyTarget } } } : {}),
   },
   preview: {
     port,

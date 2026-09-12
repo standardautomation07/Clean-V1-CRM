@@ -14,6 +14,12 @@ tags:
     description: Browser and mobile authentication endpoints.
   - name: CRM
     description: Owner-scoped CRM operations.
+  - name: Enquiry
+    description: AI-assisted enquiry intake. Extraction only; leads are created through the CRM lead endpoints after user confirmation.
+  - name: Products
+    description: Rollvento product knowledge (read-only, from data/rollvento-products.json).
+  - name: Quotations
+    description: Owner-scoped quotations linked to leads. Totals are always calculated server-side.
 paths:
   /healthz:
     get:
@@ -269,6 +275,193 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FollowUpSections"
+  /enquiries/extract:
+    post:
+      tags: [Enquiry]
+      operationId: extractEnquiry
+      summary: Extract structured enquiry details with AI
+      description: |
+        Sends the enquiry form to the server-side AI extractor and returns a structured,
+        validated representation for the user to review. Nothing is persisted and no lead is
+        created by this endpoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EnquiryInput"
+      responses:
+        "200":
+          description: Structured enquiry extracted successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EnquiryExtraction"
+        "400":
+          description: Invalid request (for example an empty requirement).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: The AI response could not be validated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "502":
+          description: The AI provider request failed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: AI extraction is not configured on the server.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /products:
+    get:
+      tags: [Products]
+      operationId: listProducts
+      summary: List the Rollvento product catalogue
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: category
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/ProductCategory"
+      responses:
+        "200":
+          description: Catalogue products (no prices).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Product"
+  /products/match:
+    post:
+      tags: [Products]
+      operationId: matchProducts
+      summary: Deterministically match enquiry items to catalogue products
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductMatchRequest"
+      responses:
+        "200":
+          description: Candidate products per item; only products present in the catalogue are returned.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductMatch"
+  /leads/{id}/quotations:
+    get:
+      tags: [Quotations]
+      operationId: listLeadQuotations
+      summary: List quotations for a lead
+      parameters:
+        - $ref: "#/components/parameters/LeadId"
+      responses:
+        "200":
+          description: Quotations for the lead, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QuotationSummary"
+  /quotations:
+    post:
+      tags: [Quotations]
+      operationId: createQuotation
+      summary: Create a draft quotation for a lead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuotationInput"
+      responses:
+        "201":
+          description: Created quotation with server-calculated totals and number.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quotation"
+  /quotations/{id}:
+    get:
+      tags: [Quotations]
+      operationId: getQuotation
+      summary: Get a quotation with its items
+      parameters:
+        - $ref: "#/components/parameters/QuotationId"
+      responses:
+        "200":
+          description: Quotation detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quotation"
+    patch:
+      tags: [Quotations]
+      operationId: updateQuotation
+      summary: Update quotation items, tax, validity or terms (totals recalculated)
+      parameters:
+        - $ref: "#/components/parameters/QuotationId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuotationUpdate"
+      responses:
+        "200":
+          description: Updated quotation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quotation"
+  /quotations/{id}/generate:
+    post:
+      tags: [Quotations]
+      operationId: generateQuotation
+      summary: Mark the quotation as Generated and record it on the lead
+      parameters:
+        - $ref: "#/components/parameters/QuotationId"
+      responses:
+        "200":
+          description: Generated quotation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quotation"
+  /quotations/{id}/pdf:
+    get:
+      tags: [Quotations]
+      operationId: getQuotationPdf
+      summary: Render the saved quotation as a PDF
+      parameters:
+        - $ref: "#/components/parameters/QuotationId"
+      responses:
+        "200":
+          description: PDF document.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
   /customers:
     get:
       tags: [CRM]
@@ -298,6 +491,12 @@ components:
       schema:
         type: string
     LeadId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+    QuotationId:
       name: id
       in: path
       required: true
@@ -352,6 +551,14 @@ components:
       required: [error]
       properties:
         error: { type: string }
+    CalendarDate:
+      type: string
+      description: Calendar date as YYYY-MM-DD. Never converted to a timestamp, so it does not shift with timezones.
+      pattern: '^\d{4}-\d{2}-\d{2}$'
+    CalendarDateOrNull:
+      type: [string, "null"]
+      description: Calendar date as YYYY-MM-DD, or null.
+      pattern: '^\d{4}-\d{2}-\d{2}$'
     LeadStatus:
       type: string
       enum: [New, Contacted, Qualified, Proposal, Negotiation, Won, Lost]
@@ -371,7 +578,7 @@ components:
         requirement: { type: string }
         estimatedValue: { type: number }
         status: { $ref: "#/components/schemas/LeadStatus" }
-        nextFollowUp: { type: [string, "null"], format: date }
+        nextFollowUp: { $ref: "#/components/schemas/CalendarDateOrNull" }
         notes: { type: string }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
@@ -391,12 +598,15 @@ components:
         companyName: { type: string, minLength: 1 }
         contactName: { type: string, minLength: 1 }
         phone: { type: string }
-        email: { type: string, format: email }
+        email:
+          type: string
+          description: Valid email address, or an empty string when the email is not known.
+          pattern: '^$|^[^\s@]+@[^\s@]+\.[^\s@]+$'
         source: { $ref: "#/components/schemas/LeadSource" }
         requirement: { type: string }
         estimatedValue: { type: number, minimum: 0 }
         status: { $ref: "#/components/schemas/LeadStatus" }
-        nextFollowUp: { type: [string, "null"], format: date }
+        nextFollowUp: { $ref: "#/components/schemas/CalendarDateOrNull" }
         notes: { type: string }
     LeadUpdate:
       type: object
@@ -404,12 +614,15 @@ components:
         companyName: { type: string, minLength: 1 }
         contactName: { type: string, minLength: 1 }
         phone: { type: string }
-        email: { type: string, format: email }
+        email:
+          type: string
+          description: Valid email address, or an empty string when the email is not known.
+          pattern: '^$|^[^\s@]+@[^\s@]+\.[^\s@]+$'
         source: { $ref: "#/components/schemas/LeadSource" }
         requirement: { type: string }
         estimatedValue: { type: number, minimum: 0 }
         status: { $ref: "#/components/schemas/LeadStatus" }
-        nextFollowUp: { type: [string, "null"], format: date }
+        nextFollowUp: { $ref: "#/components/schemas/CalendarDateOrNull" }
         notes: { type: string }
     Activity:
       type: object
@@ -419,7 +632,7 @@ components:
         leadId: { type: integer }
         type:
           type: string
-          enum: [Note, StatusChange, FollowUpScheduled, LeadCreated]
+          enum: [Note, StatusChange, FollowUpScheduled, LeadCreated, Quotation]
         description: { type: string }
         createdAt: { type: string, format: date-time }
         createdBy: { type: string }
@@ -429,7 +642,7 @@ components:
       properties:
         type:
           type: string
-          enum: [Note, StatusChange, FollowUpScheduled, LeadCreated]
+          enum: [Note, StatusChange, FollowUpScheduled, LeadCreated, Quotation]
         description: { type: string, minLength: 1 }
     FollowUp:
       type: object
@@ -438,7 +651,7 @@ components:
         id: { type: integer }
         companyName: { type: string }
         contactName: { type: string }
-        nextFollowUp: { type: string, format: date }
+        nextFollowUp: { $ref: "#/components/schemas/CalendarDate" }
         status: { $ref: "#/components/schemas/LeadStatus" }
     FollowUpSections:
       type: object
@@ -466,6 +679,223 @@ components:
         requirement: { type: string }
         value: { type: number }
         convertedAt: { type: string, format: date-time }
+    EnquiryInput:
+      type: object
+      description: Raw enquiry as entered by the user on the New Enquiry form.
+      required: [requirement]
+      properties:
+        companyName: { type: string, maxLength: 200 }
+        contactName: { type: string, maxLength: 200 }
+        phone: { type: string, maxLength: 50 }
+        email: { type: string, maxLength: 320 }
+        location: { type: string, maxLength: 200 }
+        requirement: { type: string, minLength: 1, maxLength: 8000 }
+    ProductCategory:
+      type: string
+      enum: [Sliding Gate Motors, Swing Gate Motors, Industrial Door Motors, Barrier Gate Automation, Accessories & Controls, Rolling Shutter Motors, Automatic Door Operators]
+    ExtractedSpecification:
+      type: object
+      required: [name, value]
+      properties:
+        name: { type: string }
+        value: { type: string }
+    ExtractedEnquiryItem:
+      type: object
+      required: [productHint, category, mentionedModel, requiredCapacityKg, quantity, unit, specifications]
+      properties:
+        productHint:
+          type: string
+          description: Product or category mentioned or clearly implied in the enquiry wording.
+        category:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCategory"
+            - type: "null"
+          description: Rollvento catalogue category implied by the wording, or null when unclear.
+        mentionedModel:
+          type: [string, "null"]
+          description: A Rollvento model code the customer explicitly named, verbatim. Null unless literally stated.
+        requiredCapacityKg:
+          type: [number, "null"]
+          description: Gate, shutter or leaf weight in kg only when the customer stated it.
+        quantity: { type: [number, "null"] }
+        unit: { type: [string, "null"] }
+        specifications:
+          type: array
+          items: { $ref: "#/components/schemas/ExtractedSpecification" }
+    ExtractedEnquiry:
+      type: object
+      description: Structured enquiry produced by AI extraction. Missing information is null or empty; nothing is invented.
+      required: [companyName, contactName, phone, email, location, items, notes, missingInformation]
+      properties:
+        companyName: { type: string }
+        contactName: { type: string }
+        phone: { type: string }
+        email: { type: [string, "null"] }
+        location: { type: [string, "null"] }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ExtractedEnquiryItem" }
+        notes: { type: [string, "null"] }
+        missingInformation:
+          type: array
+          description: Questions the salesperson should ask because the enquiry did not state the information.
+          items: { type: string }
+    ProductSpecification:
+      type: object
+      required: [label, value, unit]
+      properties:
+        label: { type: string }
+        value: { type: string }
+        unit: { type: [string, "null"] }
+    Product:
+      type: object
+      description: A Rollvento catalogue product. Null specification fields mean the knowledge base does not state them.
+      required: [id, model, productName, category, family, shortDescription, motorType, power, torque, voltage, capacityKg, keySpecifications, applications]
+      properties:
+        id: { type: string }
+        model: { type: string }
+        productName: { type: string }
+        category: { $ref: "#/components/schemas/ProductCategory" }
+        family: { type: string }
+        shortDescription: { type: [string, "null"] }
+        motorType: { type: [string, "null"] }
+        power: { type: [string, "null"] }
+        torque: { type: [string, "null"] }
+        voltage: { type: [string, "null"] }
+        capacityKg: { type: [number, "null"] }
+        keySpecifications:
+          type: array
+          items: { $ref: "#/components/schemas/ProductSpecification" }
+        applications:
+          type: array
+          items: { type: string }
+    ProductCandidate:
+      type: object
+      required: [product, reason]
+      properties:
+        product: { $ref: "#/components/schemas/Product" }
+        reason: { type: string }
+    ProductMatch:
+      type: object
+      description: Matching result for one enquiry item.
+      required: [itemIndex, category, candidates, questions, unknownModel, noMatchReason]
+      properties:
+        itemIndex: { type: integer }
+        category:
+          oneOf:
+            - $ref: "#/components/schemas/ProductCategory"
+            - type: "null"
+        candidates:
+          type: array
+          items: { $ref: "#/components/schemas/ProductCandidate" }
+        questions:
+          type: array
+          items: { type: string }
+        unknownModel:
+          type: [string, "null"]
+          description: A model code that was mentioned but does not exist in the Rollvento catalogue.
+        noMatchReason: { type: [string, "null"] }
+    ProductMatchRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ExtractedEnquiryItem" }
+    EnquiryExtraction:
+      type: object
+      description: Extraction plus deterministic product matches for each item.
+      required: [enquiry, matches]
+      properties:
+        enquiry: { $ref: "#/components/schemas/ExtractedEnquiry" }
+        matches:
+          type: array
+          items: { $ref: "#/components/schemas/ProductMatch" }
+    QuotationStatus:
+      type: string
+      enum: [Draft, Generated]
+    QuotationItemInput:
+      type: object
+      required: [productModel, productName, quantity, unit, unitPrice, discount]
+      properties:
+        productModel: { type: string, maxLength: 64 }
+        productName: { type: string, minLength: 1, maxLength: 300 }
+        quantity: { type: number, minimum: 0 }
+        unit: { type: string, minLength: 1, maxLength: 32 }
+        unitPrice: { type: number, minimum: 0 }
+        discount: { type: number, minimum: 0, maximum: 100, description: Line discount in percent. }
+    QuotationItem:
+      type: object
+      required: [id, productModel, productName, quantity, unit, unitPrice, discount, lineTotal]
+      properties:
+        id: { type: integer }
+        productModel: { type: string }
+        productName: { type: string }
+        quantity: { type: number }
+        unit: { type: string }
+        unitPrice: { type: number }
+        discount: { type: number }
+        lineTotal: { type: number }
+    QuotationInput:
+      type: object
+      required: [leadId, items, taxRate, validUntil, terms, notes]
+      properties:
+        leadId: { type: integer }
+        items:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/QuotationItemInput" }
+        taxRate: { type: number, minimum: 0, maximum: 100, description: GST percent. }
+        validUntil: { $ref: "#/components/schemas/CalendarDateOrNull" }
+        terms: { type: string }
+        notes: { type: string }
+    QuotationUpdate:
+      type: object
+      properties:
+        items:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/QuotationItemInput" }
+        taxRate: { type: number, minimum: 0, maximum: 100 }
+        validUntil: { $ref: "#/components/schemas/CalendarDateOrNull" }
+        terms: { type: string }
+        notes: { type: string }
+    QuotationSummary:
+      type: object
+      required: [id, leadId, quotationNumber, status, currency, total, validUntil, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        leadId: { type: integer }
+        quotationNumber: { type: string }
+        status: { $ref: "#/components/schemas/QuotationStatus" }
+        currency: { type: string }
+        total: { type: number }
+        validUntil: { $ref: "#/components/schemas/CalendarDateOrNull" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Quotation:
+      type: object
+      required: [id, leadId, quotationNumber, status, currency, subtotal, discount, taxableAmount, taxRate, taxAmount, total, validUntil, terms, notes, items, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        leadId: { type: integer }
+        quotationNumber: { type: string }
+        status: { $ref: "#/components/schemas/QuotationStatus" }
+        currency: { type: string }
+        subtotal: { type: number }
+        discount: { type: number }
+        taxableAmount: { type: number }
+        taxRate: { type: number }
+        taxAmount: { type: number }
+        total: { type: number }
+        validUntil: { $ref: "#/components/schemas/CalendarDateOrNull" }
+        terms: { type: string }
+        notes: { type: string }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/QuotationItem" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     DashboardSummary:
       type: object
       required: [totalLeads, newLeads, followUpsToday, wonLeads, lostLeads, recentLeads, todaysFollowUps]

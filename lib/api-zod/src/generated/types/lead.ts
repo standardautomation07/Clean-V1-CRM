@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CalendarDateOrNull } from './calendarDateOrNull';
 import type { LeadSource } from './leadSource';
 import type { LeadStatus } from './leadStatus';
 
@@ -18,8 +19,7 @@ export interface Lead {
   requirement: string;
   estimatedValue: number;
   status: LeadStatus;
-  /** @nullable */
-  nextFollowUp: Date | null;
+  nextFollowUp: CalendarDateOrNull | null;
   notes: string;
   createdAt: Date;
   updatedAt: Date;

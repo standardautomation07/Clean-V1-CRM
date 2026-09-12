@@ -37,6 +37,7 @@ import { useToast } from '@/hooks/use-toast';
 const navItems = [
   { href: '/', label: 'Overview', icon: Gauge },
   { href: '/leads', label: 'Leads', icon: LayoutList },
+  { href: '/enquiry', label: 'New Enquiry', icon: Sparkles },
   { href: '/follow-ups', label: 'Follow-ups', icon: CalendarDays },
   { href: '/customers', label: 'Customers', icon: Users },
 ];
@@ -101,6 +102,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <button type="button" onClick={() => setMobileOpen(true)} data-testid="button-open-menu" className="rounded-md p-2 text-muted-foreground hover:bg-muted md:hidden"><Menu className="size-5" /></button>
           <div className="hidden items-center gap-2 text-xs text-muted-foreground md:flex"><span className="size-1.5 rounded-full bg-accent-foreground" />Pipeline at a glance</div>
           <div className="ml-auto flex items-center gap-2">
+            <Link href="/enquiry" data-testid="link-new-enquiry" className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground transition-colors hover:brightness-105"><Sparkles className="size-3.5" /><span className="hidden sm:inline">New enquiry</span></Link>
             <Link href="/leads" data-testid="link-command-search" className="hidden items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground sm:flex"><Search className="size-3.5" />Search <kbd className="ml-4 font-mono text-[10px] opacity-60">Ctrl K</kbd></Link>
             <Link href="/follow-ups" data-testid="link-notifications" className="relative rounded-lg border border-transparent p-2 text-muted-foreground transition-colors hover:border-border hover:bg-card hover:text-foreground"><Bell className="size-[17px]" strokeWidth={1.8} /><span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-primary" /></Link>
             <Link href="/settings" data-testid="link-settings-header" className="hidden rounded-lg border border-transparent p-2 text-muted-foreground transition-colors hover:border-border hover:bg-card hover:text-foreground sm:block"><Settings className="size-[17px]" strokeWidth={1.8} /></Link>
@@ -158,7 +160,7 @@ export function LeadDialog({ open, onOpenChange, lead }: { open: boolean; onOpen
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-w-2xl border-card-border bg-card p-0"><div className="border-b border-border bg-accent/35 px-6 py-5"><DialogHeader><DialogTitle className="font-display text-2xl tracking-[-0.05em]">{editing ? 'Edit lead' : 'Add a lead'}</DialogTitle><DialogDescription className="mt-1">Keep the useful context close to the conversation.</DialogDescription></DialogHeader></div><form onSubmit={submit} className="space-y-5 p-6">
     <div className="grid gap-4 sm:grid-cols-2"><Field label="Company" value={form.companyName} onChange={(v) => update('companyName', v)} placeholder="Northstar Studio" required testId="input-company-name" /><Field label="Contact" value={form.contactName} onChange={(v) => update('contactName', v)} placeholder="Maya Chen" required testId="input-contact-name" /><Field label="Email" value={form.email} onChange={(v) => update('email', v)} placeholder="maya@northstar.co" type="email" testId="input-email" /><Field label="Phone" value={form.phone} onChange={(v) => update('phone', v)} placeholder="+1 415 555 0138" testId="input-phone" /></div>
     <div className="grid gap-4 sm:grid-cols-3"><SelectField label="Source" value={form.source} onChange={(v) => update('source', v as LeadSource)} options={Object.values(LeadSource)} testId="select-source" /><SelectField label="Status" value={form.status} onChange={(v) => update('status', v as LeadStatus)} options={Object.values(LeadStatus)} testId="select-status" /><Field label="Est. value" value={String(form.estimatedValue || '')} onChange={(v) => update('estimatedValue', Number(v) || 0)} placeholder="12000" type="number" testId="input-estimated-value" /></div>
-    <Field label="Requirement" value={form.requirement} onChange={(v) => update('requirement', v)} placeholder="What are they trying to solve?" testId="input-requirement" /><div className="grid gap-4 sm:grid-cols-2"><Field label="Next follow-up" value={form.nextFollowUp?.slice(0, 16) || ''} onChange={(v) => update('nextFollowUp', v ? new Date(v).toISOString() : null)} type="datetime-local" testId="input-next-follow-up" /><Field label="Notes" value={form.notes} onChange={(v) => update('notes', v)} placeholder="Useful context for the team" testId="input-notes" /></div>
+    <Field label="Requirement" value={form.requirement} onChange={(v) => update('requirement', v)} placeholder="What are they trying to solve?" testId="input-requirement" /><div className="grid gap-4 sm:grid-cols-2"><Field label="Next follow-up" value={form.nextFollowUp || ''} onChange={(v) => update('nextFollowUp', v || null)} type="date" testId="input-next-follow-up" /><Field label="Notes" value={form.notes} onChange={(v) => update('notes', v)} placeholder="Useful context for the team" testId="input-notes" /></div>
     <div className="flex flex-col-reverse gap-2 border-t border-border pt-5 sm:flex-row sm:justify-end"><Button type="button" variant="outline" onClick={() => onOpenChange(false)} data-testid="button-cancel-lead">Cancel</Button><Button type="submit" disabled={createLead.isPending || updateLead.isPending} data-testid="button-save-lead">{createLead.isPending || updateLead.isPending ? 'Saving…' : editing ? 'Save changes' : 'Add lead'}<ArrowUpRight className="size-4" /></Button></div>
   </form></DialogContent></Dialog>;
 }
@@ -177,6 +179,9 @@ export function Money({ value }: { value: number }) { return <span>{new Intl.Num
 
 export function DateLabel({ value, includeTime = false }: { value?: string | null; includeTime?: boolean }) {
   if (!value) return <span className="text-muted-foreground">Not set</span>;
+  // Calendar dates (YYYY-MM-DD) are shown as local dates so they never shift with the timezone.
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (dateOnly) return <span>{new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3])).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>;
   const date = new Date(value);
   return <span>{date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: includeTime ? 'numeric' : undefined })}{includeTime && <span className="text-muted-foreground"> · {date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span>}</span>;
 }

@@ -5,12 +5,13 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CalendarDate } from './calendarDate';
 import type { LeadStatus } from './leadStatus';
 
 export interface FollowUp {
   id: number;
   companyName: string;
   contactName: string;
-  nextFollowUp: Date;
+  nextFollowUp: CalendarDate;
   status: LeadStatus;
 }

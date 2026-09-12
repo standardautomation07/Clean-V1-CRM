@@ -54,6 +54,19 @@ export interface ErrorEnvelope {
   error: string;
 }
 
+/**
+ * Calendar date as YYYY-MM-DD. Never converted to a timestamp, so it does not shift with timezones.
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+export type CalendarDate = string;
+
+/**
+ * Calendar date as YYYY-MM-DD, or null.
+ * @nullable
+ * @pattern ^\d{4}-\d{2}-\d{2}$
+ */
+export type CalendarDateOrNull = string | null;
+
 export type LeadStatus = typeof LeadStatus[keyof typeof LeadStatus];
 
 
@@ -89,8 +102,7 @@ export interface Lead {
   requirement: string;
   estimatedValue: number;
   status: LeadStatus;
-  /** @nullable */
-  nextFollowUp: string | null;
+  nextFollowUp: CalendarDateOrNull | null;
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -105,6 +117,7 @@ export const ActivityType = {
   StatusChange: 'StatusChange',
   FollowUpScheduled: 'FollowUpScheduled',
   LeadCreated: 'LeadCreated',
+  Quotation: 'Quotation',
 } as const;
 
 export interface Activity {
@@ -127,14 +140,17 @@ export interface LeadInput {
   /** @minLength 1 */
   contactName: string;
   phone: string;
+  /**
+     * Valid email address, or an empty string when the email is not known.
+     * @pattern ^$|^[^\s@]+@[^\s@]+\.[^\s@]+$
+     */
   email: string;
   source: LeadSource;
   requirement: string;
   /** @minimum 0 */
   estimatedValue: number;
   status: LeadStatus;
-  /** @nullable */
-  nextFollowUp: string | null;
+  nextFollowUp: CalendarDateOrNull | null;
   notes: string;
 }
 
@@ -144,14 +160,17 @@ export interface LeadUpdate {
   /** @minLength 1 */
   contactName?: string;
   phone?: string;
+  /**
+     * Valid email address, or an empty string when the email is not known.
+     * @pattern ^$|^[^\s@]+@[^\s@]+\.[^\s@]+$
+     */
   email?: string;
   source?: LeadSource;
   requirement?: string;
   /** @minimum 0 */
   estimatedValue?: number;
   status?: LeadStatus;
-  /** @nullable */
-  nextFollowUp?: string | null;
+  nextFollowUp?: CalendarDateOrNull | null;
   notes?: string;
 }
 
@@ -163,6 +182,7 @@ export const ActivityInputType = {
   StatusChange: 'StatusChange',
   FollowUpScheduled: 'FollowUpScheduled',
   LeadCreated: 'LeadCreated',
+  Quotation: 'Quotation',
 } as const;
 
 export interface ActivityInput {
@@ -175,7 +195,7 @@ export interface FollowUp {
   id: number;
   companyName: string;
   contactName: string;
-  nextFollowUp: string;
+  nextFollowUp: CalendarDate;
   status: LeadStatus;
 }
 
@@ -195,6 +215,255 @@ export interface Customer {
   requirement: string;
   value: number;
   convertedAt: string;
+}
+
+/**
+ * Raw enquiry as entered by the user on the New Enquiry form.
+ */
+export interface EnquiryInput {
+  /** @maxLength 200 */
+  companyName?: string;
+  /** @maxLength 200 */
+  contactName?: string;
+  /** @maxLength 50 */
+  phone?: string;
+  /** @maxLength 320 */
+  email?: string;
+  /** @maxLength 200 */
+  location?: string;
+  /**
+     * @minLength 1
+     * @maxLength 8000
+     */
+  requirement: string;
+}
+
+export type ProductCategory = typeof ProductCategory[keyof typeof ProductCategory];
+
+
+export const ProductCategory = {
+  Sliding_Gate_Motors: 'Sliding Gate Motors',
+  Swing_Gate_Motors: 'Swing Gate Motors',
+  Industrial_Door_Motors: 'Industrial Door Motors',
+  Barrier_Gate_Automation: 'Barrier Gate Automation',
+  'Accessories_&_Controls': 'Accessories & Controls',
+  Rolling_Shutter_Motors: 'Rolling Shutter Motors',
+  Automatic_Door_Operators: 'Automatic Door Operators',
+} as const;
+
+export interface ExtractedSpecification {
+  name: string;
+  value: string;
+}
+
+export interface ExtractedEnquiryItem {
+  /** Product or category mentioned or clearly implied in the enquiry wording. */
+  productHint: string;
+  /** Rollvento catalogue category implied by the wording, or null when unclear. */
+  category: ProductCategory | null;
+  /**
+     * A Rollvento model code the customer explicitly named, verbatim. Null unless literally stated.
+     * @nullable
+     */
+  mentionedModel: string | null;
+  /**
+     * Gate, shutter or leaf weight in kg only when the customer stated it.
+     * @nullable
+     */
+  requiredCapacityKg: number | null;
+  /** @nullable */
+  quantity: number | null;
+  /** @nullable */
+  unit: string | null;
+  specifications: ExtractedSpecification[];
+}
+
+/**
+ * Structured enquiry produced by AI extraction. Missing information is null or empty; nothing is invented.
+ */
+export interface ExtractedEnquiry {
+  companyName: string;
+  contactName: string;
+  phone: string;
+  /** @nullable */
+  email: string | null;
+  /** @nullable */
+  location: string | null;
+  items: ExtractedEnquiryItem[];
+  /** @nullable */
+  notes: string | null;
+  /** Questions the salesperson should ask because the enquiry did not state the information. */
+  missingInformation: string[];
+}
+
+export interface ProductSpecification {
+  label: string;
+  value: string;
+  /** @nullable */
+  unit: string | null;
+}
+
+/**
+ * A Rollvento catalogue product. Null specification fields mean the knowledge base does not state them.
+ */
+export interface Product {
+  id: string;
+  model: string;
+  productName: string;
+  category: ProductCategory;
+  family: string;
+  /** @nullable */
+  shortDescription: string | null;
+  /** @nullable */
+  motorType: string | null;
+  /** @nullable */
+  power: string | null;
+  /** @nullable */
+  torque: string | null;
+  /** @nullable */
+  voltage: string | null;
+  /** @nullable */
+  capacityKg: number | null;
+  keySpecifications: ProductSpecification[];
+  applications: string[];
+}
+
+export interface ProductCandidate {
+  product: Product;
+  reason: string;
+}
+
+/**
+ * Matching result for one enquiry item.
+ */
+export interface ProductMatch {
+  itemIndex: number;
+  category: ProductCategory | null;
+  candidates: ProductCandidate[];
+  questions: string[];
+  /**
+     * A model code that was mentioned but does not exist in the Rollvento catalogue.
+     * @nullable
+     */
+  unknownModel: string | null;
+  /** @nullable */
+  noMatchReason: string | null;
+}
+
+export interface ProductMatchRequest {
+  items: ExtractedEnquiryItem[];
+}
+
+/**
+ * Extraction plus deterministic product matches for each item.
+ */
+export interface EnquiryExtraction {
+  enquiry: ExtractedEnquiry;
+  matches: ProductMatch[];
+}
+
+export type QuotationStatus = typeof QuotationStatus[keyof typeof QuotationStatus];
+
+
+export const QuotationStatus = {
+  Draft: 'Draft',
+  Generated: 'Generated',
+} as const;
+
+export interface QuotationItemInput {
+  /** @maxLength 64 */
+  productModel: string;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  productName: string;
+  /** @minimum 0 */
+  quantity: number;
+  /**
+     * @minLength 1
+     * @maxLength 32
+     */
+  unit: string;
+  /** @minimum 0 */
+  unitPrice: number;
+  /**
+     * Line discount in percent.
+     * @minimum 0
+     * @maximum 100
+     */
+  discount: number;
+}
+
+export interface QuotationItem {
+  id: number;
+  productModel: string;
+  productName: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  discount: number;
+  lineTotal: number;
+}
+
+export interface QuotationInput {
+  leadId: number;
+  /** @minItems 1 */
+  items: QuotationItemInput[];
+  /**
+     * GST percent.
+     * @minimum 0
+     * @maximum 100
+     */
+  taxRate: number;
+  validUntil: CalendarDateOrNull | null;
+  terms: string;
+  notes: string;
+}
+
+export interface QuotationUpdate {
+  /** @minItems 1 */
+  items?: QuotationItemInput[];
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  taxRate?: number;
+  validUntil?: CalendarDateOrNull | null;
+  terms?: string;
+  notes?: string;
+}
+
+export interface QuotationSummary {
+  id: number;
+  leadId: number;
+  quotationNumber: string;
+  status: QuotationStatus;
+  currency: string;
+  total: number;
+  validUntil: CalendarDateOrNull | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Quotation {
+  id: number;
+  leadId: number;
+  quotationNumber: string;
+  status: QuotationStatus;
+  currency: string;
+  subtotal: number;
+  discount: number;
+  taxableAmount: number;
+  taxRate: number;
+  taxAmount: number;
+  total: number;
+  validUntil: CalendarDateOrNull | null;
+  terms: string;
+  notes: string;
+  items: QuotationItem[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface DashboardSummary {
@@ -232,4 +501,9 @@ export const ListLeadsSort = {
   oldest: 'oldest',
   follow_up: 'follow_up',
 } as const;
+
+export type ListProductsParams = {
+search?: string;
+category?: ProductCategory;
+};
 

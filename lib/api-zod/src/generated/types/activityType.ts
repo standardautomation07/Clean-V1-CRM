@@ -14,4 +14,5 @@ export const ActivityType = {
   StatusChange: 'StatusChange',
   FollowUpScheduled: 'FollowUpScheduled',
   LeadCreated: 'LeadCreated',
+  Quotation: 'Quotation',
 } as const;

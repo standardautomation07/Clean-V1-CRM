@@ -21,3 +21,4 @@ export * from "./auth";
 export * from "./leads";
 export * from "./activities";
 export * from "./customers";
+export * from "./quotations";

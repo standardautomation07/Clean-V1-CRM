@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { CalendarDateOrNull } from './calendarDateOrNull';
 import type { LeadSource } from './leadSource';
 import type { LeadStatus } from './leadStatus';
 
@@ -14,13 +15,16 @@ export interface LeadInput {
   /** @minLength 1 */
   contactName: string;
   phone: string;
+  /**
+     * Valid email address, or an empty string when the email is not known.
+     * @pattern ^$|^[^\s@]+@[^\s@]+\.[^\s@]+$
+     */
   email: string;
   source: LeadSource;
   requirement: string;
   /** @minimum 0 */
   estimatedValue: number;
   status: LeadStatus;
-  /** @nullable */
-  nextFollowUp: Date | null;
+  nextFollowUp: CalendarDateOrNull | null;
   notes: string;
 }

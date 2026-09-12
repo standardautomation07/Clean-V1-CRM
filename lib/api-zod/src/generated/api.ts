@@ -105,6 +105,10 @@ export const LogoutMobileSessionResponse = zod.object({
 /**
  * @summary Get dashboard totals and recent CRM activity
  */
+export const getDashboardSummaryResponseRecentLeadsItemNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getDashboardSummaryResponseTodaysFollowUpsItemNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
 export const GetDashboardSummaryResponse = zod.object({
   "totalLeads": zod.number().int(),
   "newLeads": zod.number().int(),
@@ -121,7 +125,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "requirement": zod.string(),
   "estimatedValue": zod.number(),
   "status": zod.enum(['New', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost']),
-  "nextFollowUp": zod.coerce.date().nullable(),
+  "nextFollowUp": zod.string().regex(getDashboardSummaryResponseRecentLeadsItemNextFollowUpRegExp).nullable().describe('Calendar date as YYYY-MM-DD, or null.'),
   "notes": zod.string(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
@@ -131,7 +135,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "id": zod.number().int(),
   "companyName": zod.string(),
   "contactName": zod.string(),
-  "nextFollowUp": zod.coerce.date(),
+  "nextFollowUp": zod.string().regex(getDashboardSummaryResponseTodaysFollowUpsItemNextFollowUpRegExp).describe('Calendar date as YYYY-MM-DD. Never converted to a timestamp, so it does not shift with timezones.'),
   "status": zod.enum(['New', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'])
 }))
 })
@@ -149,6 +153,9 @@ export const ListLeadsQueryParams = zod.object({
   "sort": zod.enum(['newest', 'oldest', 'follow_up']).default(listLeadsQuerySortDefault)
 })
 
+export const listLeadsResponseNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
 export const ListLeadsResponseItem = zod.object({
   "id": zod.number().int(),
   "companyName": zod.string(),
@@ -159,7 +166,7 @@ export const ListLeadsResponseItem = zod.object({
   "requirement": zod.string(),
   "estimatedValue": zod.number(),
   "status": zod.enum(['New', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost']),
-  "nextFollowUp": zod.coerce.date().nullable(),
+  "nextFollowUp": zod.string().regex(listLeadsResponseNextFollowUpRegExp).nullable().describe('Calendar date as YYYY-MM-DD, or null.'),
   "notes": zod.string(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
@@ -173,22 +180,27 @@ export const ListLeadsResponse = zod.array(ListLeadsResponseItem)
  */
 
 
+export const createLeadBodyEmailRegExp = new RegExp('^$|^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
 export const createLeadBodyEstimatedValueMin = 0;
 
+export const createLeadBodyNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const CreateLeadBody = zod.object({
   "companyName": zod.string().min(1),
   "contactName": zod.string().min(1),
   "phone": zod.string(),
-  "email": zod.string().email(),
+  "email": zod.string().regex(createLeadBodyEmailRegExp).describe('Valid email address, or an empty string when the email is not known.'),
   "source": zod.enum(['Website', 'WhatsApp', 'Phone', 'Email', 'Referral', 'Other']),
   "requirement": zod.string(),
   "estimatedValue": zod.number().min(createLeadBodyEstimatedValueMin),
   "status": zod.enum(['New', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost']),
-  "nextFollowUp": zod.coerce.date().nullable(),
+  "nextFollowUp": zod.string().regex(createLeadBodyNextFollowUpRegExp).nullable().describe('Calendar date as YYYY-MM-DD, or null.'),
   "notes": zod.string()
 })
+
+export const createLeadResponseNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
 
 export const CreateLeadResponse = zod.object({
   "id": zod.number().int(),
@@ -200,7 +212,7 @@ export const CreateLeadResponse = zod.object({
   "requirement": zod.string(),
   "estimatedValue": zod.number(),
   "status": zod.enum(['New', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost']),
-  "nextFollowUp": zod.coerce.date().nullable(),
+  "nextFollowUp": zod.string().regex(createLeadResponseNextFollowUpRegExp).nullable().describe('Calendar date as YYYY-MM-DD, or null.'),
   "notes": zod.string(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
@@ -215,6 +227,9 @@ export const GetLeadParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const getLeadResponseLeadNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
 export const GetLeadResponse = zod.object({
   "lead": zod.object({
   "id": zod.number().int(),
@@ -226,7 +241,7 @@ export const GetLeadResponse = zod.object({
   "requirement": zod.string(),
   "estimatedValue": zod.number(),
   "status": zod.enum(['New', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost']),
-  "nextFollowUp": zod.coerce.date().nullable(),
+  "nextFollowUp": zod.string().regex(getLeadResponseLeadNextFollowUpRegExp).nullable().describe('Calendar date as YYYY-MM-DD, or null.'),
   "notes": zod.string(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
@@ -235,7 +250,7 @@ export const GetLeadResponse = zod.object({
   "activities": zod.array(zod.object({
   "id": zod.number().int(),
   "leadId": zod.number().int(),
-  "type": zod.enum(['Note', 'StatusChange', 'FollowUpScheduled', 'LeadCreated']),
+  "type": zod.enum(['Note', 'StatusChange', 'FollowUpScheduled', 'LeadCreated', 'Quotation']),
   "description": zod.string(),
   "createdAt": zod.coerce.date(),
   "createdBy": zod.string()
@@ -252,22 +267,27 @@ export const UpdateLeadParams = zod.object({
 
 
 
+export const updateLeadBodyEmailRegExp = new RegExp('^$|^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
 export const updateLeadBodyEstimatedValueMin = 0;
 
+export const updateLeadBodyNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
 export const UpdateLeadBody = zod.object({
   "companyName": zod.string().min(1).optional(),
   "contactName": zod.string().min(1).optional(),
   "phone": zod.string().optional(),
-  "email": zod.string().email().optional(),
+  "email": zod.string().regex(updateLeadBodyEmailRegExp).optional().describe('Valid email address, or an empty string when the email is not known.'),
   "source": zod.enum(['Website', 'WhatsApp', 'Phone', 'Email', 'Referral', 'Other']).optional(),
   "requirement": zod.string().optional(),
   "estimatedValue": zod.number().min(updateLeadBodyEstimatedValueMin).optional(),
   "status": zod.enum(['New', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost']).optional(),
-  "nextFollowUp": zod.coerce.date().nullish(),
+  "nextFollowUp": zod.string().regex(updateLeadBodyNextFollowUpRegExp).nullish().describe('Calendar date as YYYY-MM-DD, or null.'),
   "notes": zod.string().optional()
 })
+
+export const updateLeadResponseNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
 
 export const UpdateLeadResponse = zod.object({
   "id": zod.number().int(),
@@ -279,7 +299,7 @@ export const UpdateLeadResponse = zod.object({
   "requirement": zod.string(),
   "estimatedValue": zod.number(),
   "status": zod.enum(['New', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost']),
-  "nextFollowUp": zod.coerce.date().nullable(),
+  "nextFollowUp": zod.string().regex(updateLeadResponseNextFollowUpRegExp).nullable().describe('Calendar date as YYYY-MM-DD, or null.'),
   "notes": zod.string(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
@@ -307,7 +327,7 @@ export const ListLeadActivitiesParams = zod.object({
 export const ListLeadActivitiesResponseItem = zod.object({
   "id": zod.number().int(),
   "leadId": zod.number().int(),
-  "type": zod.enum(['Note', 'StatusChange', 'FollowUpScheduled', 'LeadCreated']),
+  "type": zod.enum(['Note', 'StatusChange', 'FollowUpScheduled', 'LeadCreated', 'Quotation']),
   "description": zod.string(),
   "createdAt": zod.coerce.date(),
   "createdBy": zod.string()
@@ -326,14 +346,14 @@ export const CreateLeadActivityParams = zod.object({
 
 
 export const CreateLeadActivityBody = zod.object({
-  "type": zod.enum(['Note', 'StatusChange', 'FollowUpScheduled', 'LeadCreated']),
+  "type": zod.enum(['Note', 'StatusChange', 'FollowUpScheduled', 'LeadCreated', 'Quotation']),
   "description": zod.string().min(1)
 })
 
 export const CreateLeadActivityResponse = zod.object({
   "id": zod.number().int(),
   "leadId": zod.number().int(),
-  "type": zod.enum(['Note', 'StatusChange', 'FollowUpScheduled', 'LeadCreated']),
+  "type": zod.enum(['Note', 'StatusChange', 'FollowUpScheduled', 'LeadCreated', 'Quotation']),
   "description": zod.string(),
   "createdAt": zod.coerce.date(),
   "createdBy": zod.string()
@@ -343,29 +363,458 @@ export const CreateLeadActivityResponse = zod.object({
 /**
  * @summary List overdue, today, and upcoming follow-ups
  */
+export const listFollowUpsResponseOverdueItemNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const listFollowUpsResponseTodayItemNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const listFollowUpsResponseUpcomingItemNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
 export const ListFollowUpsResponse = zod.object({
   "overdue": zod.array(zod.object({
   "id": zod.number().int(),
   "companyName": zod.string(),
   "contactName": zod.string(),
-  "nextFollowUp": zod.coerce.date(),
+  "nextFollowUp": zod.string().regex(listFollowUpsResponseOverdueItemNextFollowUpRegExp).describe('Calendar date as YYYY-MM-DD. Never converted to a timestamp, so it does not shift with timezones.'),
   "status": zod.enum(['New', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'])
 })),
   "today": zod.array(zod.object({
   "id": zod.number().int(),
   "companyName": zod.string(),
   "contactName": zod.string(),
-  "nextFollowUp": zod.coerce.date(),
+  "nextFollowUp": zod.string().regex(listFollowUpsResponseTodayItemNextFollowUpRegExp).describe('Calendar date as YYYY-MM-DD. Never converted to a timestamp, so it does not shift with timezones.'),
   "status": zod.enum(['New', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'])
 })),
   "upcoming": zod.array(zod.object({
   "id": zod.number().int(),
   "companyName": zod.string(),
   "contactName": zod.string(),
-  "nextFollowUp": zod.coerce.date(),
+  "nextFollowUp": zod.string().regex(listFollowUpsResponseUpcomingItemNextFollowUpRegExp).describe('Calendar date as YYYY-MM-DD. Never converted to a timestamp, so it does not shift with timezones.'),
   "status": zod.enum(['New', 'Contacted', 'Qualified', 'Proposal', 'Negotiation', 'Won', 'Lost'])
 }))
 })
+
+
+/**
+ * Sends the enquiry form to the server-side AI extractor and returns a structured,
+ * validated representation for the user to review. Nothing is persisted and no lead is
+ * created by this endpoint.
+ * @summary Extract structured enquiry details with AI
+ */
+export const extractEnquiryBodyCompanyNameMax = 200;
+
+export const extractEnquiryBodyContactNameMax = 200;
+
+export const extractEnquiryBodyPhoneMax = 50;
+
+export const extractEnquiryBodyEmailMax = 320;
+
+export const extractEnquiryBodyLocationMax = 200;
+
+export const extractEnquiryBodyRequirementMax = 8000;
+
+
+
+export const ExtractEnquiryBody = zod.object({
+  "companyName": zod.string().max(extractEnquiryBodyCompanyNameMax).optional(),
+  "contactName": zod.string().max(extractEnquiryBodyContactNameMax).optional(),
+  "phone": zod.string().max(extractEnquiryBodyPhoneMax).optional(),
+  "email": zod.string().max(extractEnquiryBodyEmailMax).optional(),
+  "location": zod.string().max(extractEnquiryBodyLocationMax).optional(),
+  "requirement": zod.string().min(1).max(extractEnquiryBodyRequirementMax)
+}).describe('Raw enquiry as entered by the user on the New Enquiry form.')
+
+export const ExtractEnquiryResponse = zod.object({
+  "enquiry": zod.object({
+  "companyName": zod.string(),
+  "contactName": zod.string(),
+  "phone": zod.string(),
+  "email": zod.string().nullable(),
+  "location": zod.string().nullable(),
+  "items": zod.array(zod.object({
+  "productHint": zod.string().describe('Product or category mentioned or clearly implied in the enquiry wording.'),
+  "category": zod.union([zod.enum(['Sliding Gate Motors', 'Swing Gate Motors', 'Industrial Door Motors', 'Barrier Gate Automation', 'Accessories & Controls', 'Rolling Shutter Motors', 'Automatic Door Operators']),zod.null()]).describe('Rollvento catalogue category implied by the wording, or null when unclear.'),
+  "mentionedModel": zod.string().nullable().describe('A Rollvento model code the customer explicitly named, verbatim. Null unless literally stated.'),
+  "requiredCapacityKg": zod.number().nullable().describe('Gate, shutter or leaf weight in kg only when the customer stated it.'),
+  "quantity": zod.number().nullable(),
+  "unit": zod.string().nullable(),
+  "specifications": zod.array(zod.object({
+  "name": zod.string(),
+  "value": zod.string()
+}))
+})),
+  "notes": zod.string().nullable(),
+  "missingInformation": zod.array(zod.string()).describe('Questions the salesperson should ask because the enquiry did not state the information.')
+}).describe('Structured enquiry produced by AI extraction. Missing information is null or empty; nothing is invented.'),
+  "matches": zod.array(zod.object({
+  "itemIndex": zod.number().int(),
+  "category": zod.union([zod.enum(['Sliding Gate Motors', 'Swing Gate Motors', 'Industrial Door Motors', 'Barrier Gate Automation', 'Accessories & Controls', 'Rolling Shutter Motors', 'Automatic Door Operators']),zod.null()]),
+  "candidates": zod.array(zod.object({
+  "product": zod.object({
+  "id": zod.string(),
+  "model": zod.string(),
+  "productName": zod.string(),
+  "category": zod.enum(['Sliding Gate Motors', 'Swing Gate Motors', 'Industrial Door Motors', 'Barrier Gate Automation', 'Accessories & Controls', 'Rolling Shutter Motors', 'Automatic Door Operators']),
+  "family": zod.string(),
+  "shortDescription": zod.string().nullable(),
+  "motorType": zod.string().nullable(),
+  "power": zod.string().nullable(),
+  "torque": zod.string().nullable(),
+  "voltage": zod.string().nullable(),
+  "capacityKg": zod.number().nullable(),
+  "keySpecifications": zod.array(zod.object({
+  "label": zod.string(),
+  "value": zod.string(),
+  "unit": zod.string().nullable()
+})),
+  "applications": zod.array(zod.string())
+}).describe('A Rollvento catalogue product. Null specification fields mean the knowledge base does not state them.'),
+  "reason": zod.string()
+})),
+  "questions": zod.array(zod.string()),
+  "unknownModel": zod.string().nullable().describe('A model code that was mentioned but does not exist in the Rollvento catalogue.'),
+  "noMatchReason": zod.string().nullable()
+}).describe('Matching result for one enquiry item.'))
+}).describe('Extraction plus deterministic product matches for each item.')
+
+
+/**
+ * @summary List the Rollvento product catalogue
+ */
+export const ListProductsQueryParams = zod.object({
+  "search": zod.coerce.string().optional(),
+  "category": zod.enum(['Sliding Gate Motors', 'Swing Gate Motors', 'Industrial Door Motors', 'Barrier Gate Automation', 'Accessories & Controls', 'Rolling Shutter Motors', 'Automatic Door Operators']).optional()
+})
+
+export const ListProductsResponseItem = zod.object({
+  "id": zod.string(),
+  "model": zod.string(),
+  "productName": zod.string(),
+  "category": zod.enum(['Sliding Gate Motors', 'Swing Gate Motors', 'Industrial Door Motors', 'Barrier Gate Automation', 'Accessories & Controls', 'Rolling Shutter Motors', 'Automatic Door Operators']),
+  "family": zod.string(),
+  "shortDescription": zod.string().nullable(),
+  "motorType": zod.string().nullable(),
+  "power": zod.string().nullable(),
+  "torque": zod.string().nullable(),
+  "voltage": zod.string().nullable(),
+  "capacityKg": zod.number().nullable(),
+  "keySpecifications": zod.array(zod.object({
+  "label": zod.string(),
+  "value": zod.string(),
+  "unit": zod.string().nullable()
+})),
+  "applications": zod.array(zod.string())
+}).describe('A Rollvento catalogue product. Null specification fields mean the knowledge base does not state them.')
+export const ListProductsResponse = zod.array(ListProductsResponseItem)
+
+
+/**
+ * @summary Deterministically match enquiry items to catalogue products
+ */
+export const MatchProductsBody = zod.object({
+  "items": zod.array(zod.object({
+  "productHint": zod.string().describe('Product or category mentioned or clearly implied in the enquiry wording.'),
+  "category": zod.union([zod.enum(['Sliding Gate Motors', 'Swing Gate Motors', 'Industrial Door Motors', 'Barrier Gate Automation', 'Accessories & Controls', 'Rolling Shutter Motors', 'Automatic Door Operators']),zod.null()]).describe('Rollvento catalogue category implied by the wording, or null when unclear.'),
+  "mentionedModel": zod.string().nullable().describe('A Rollvento model code the customer explicitly named, verbatim. Null unless literally stated.'),
+  "requiredCapacityKg": zod.number().nullable().describe('Gate, shutter or leaf weight in kg only when the customer stated it.'),
+  "quantity": zod.number().nullable(),
+  "unit": zod.string().nullable(),
+  "specifications": zod.array(zod.object({
+  "name": zod.string(),
+  "value": zod.string()
+}))
+}))
+})
+
+export const MatchProductsResponseItem = zod.object({
+  "itemIndex": zod.number().int(),
+  "category": zod.union([zod.enum(['Sliding Gate Motors', 'Swing Gate Motors', 'Industrial Door Motors', 'Barrier Gate Automation', 'Accessories & Controls', 'Rolling Shutter Motors', 'Automatic Door Operators']),zod.null()]),
+  "candidates": zod.array(zod.object({
+  "product": zod.object({
+  "id": zod.string(),
+  "model": zod.string(),
+  "productName": zod.string(),
+  "category": zod.enum(['Sliding Gate Motors', 'Swing Gate Motors', 'Industrial Door Motors', 'Barrier Gate Automation', 'Accessories & Controls', 'Rolling Shutter Motors', 'Automatic Door Operators']),
+  "family": zod.string(),
+  "shortDescription": zod.string().nullable(),
+  "motorType": zod.string().nullable(),
+  "power": zod.string().nullable(),
+  "torque": zod.string().nullable(),
+  "voltage": zod.string().nullable(),
+  "capacityKg": zod.number().nullable(),
+  "keySpecifications": zod.array(zod.object({
+  "label": zod.string(),
+  "value": zod.string(),
+  "unit": zod.string().nullable()
+})),
+  "applications": zod.array(zod.string())
+}).describe('A Rollvento catalogue product. Null specification fields mean the knowledge base does not state them.'),
+  "reason": zod.string()
+})),
+  "questions": zod.array(zod.string()),
+  "unknownModel": zod.string().nullable().describe('A model code that was mentioned but does not exist in the Rollvento catalogue.'),
+  "noMatchReason": zod.string().nullable()
+}).describe('Matching result for one enquiry item.')
+export const MatchProductsResponse = zod.array(MatchProductsResponseItem)
+
+
+/**
+ * @summary List quotations for a lead
+ */
+export const ListLeadQuotationsParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const listLeadQuotationsResponseValidUntilRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const ListLeadQuotationsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "leadId": zod.number().int(),
+  "quotationNumber": zod.string(),
+  "status": zod.enum(['Draft', 'Generated']),
+  "currency": zod.string(),
+  "total": zod.number(),
+  "validUntil": zod.string().regex(listLeadQuotationsResponseValidUntilRegExp).nullable().describe('Calendar date as YYYY-MM-DD, or null.'),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListLeadQuotationsResponse = zod.array(ListLeadQuotationsResponseItem)
+
+
+/**
+ * @summary Create a draft quotation for a lead
+ */
+export const createQuotationBodyItemsItemProductModelMax = 64;
+
+export const createQuotationBodyItemsItemProductNameMax = 300;
+
+export const createQuotationBodyItemsItemQuantityMin = 0;
+
+export const createQuotationBodyItemsItemUnitMax = 32;
+
+export const createQuotationBodyItemsItemUnitPriceMin = 0;
+
+export const createQuotationBodyItemsItemDiscountMin = 0;
+export const createQuotationBodyItemsItemDiscountMax = 100;
+
+
+export const createQuotationBodyTaxRateMin = 0;
+export const createQuotationBodyTaxRateMax = 100;
+
+export const createQuotationBodyValidUntilRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const CreateQuotationBody = zod.object({
+  "leadId": zod.number().int(),
+  "items": zod.array(zod.object({
+  "productModel": zod.string().max(createQuotationBodyItemsItemProductModelMax),
+  "productName": zod.string().min(1).max(createQuotationBodyItemsItemProductNameMax),
+  "quantity": zod.number().min(createQuotationBodyItemsItemQuantityMin),
+  "unit": zod.string().min(1).max(createQuotationBodyItemsItemUnitMax),
+  "unitPrice": zod.number().min(createQuotationBodyItemsItemUnitPriceMin),
+  "discount": zod.number().min(createQuotationBodyItemsItemDiscountMin).max(createQuotationBodyItemsItemDiscountMax).describe('Line discount in percent.')
+})).min(1),
+  "taxRate": zod.number().min(createQuotationBodyTaxRateMin).max(createQuotationBodyTaxRateMax).describe('GST percent.'),
+  "validUntil": zod.string().regex(createQuotationBodyValidUntilRegExp).nullable().describe('Calendar date as YYYY-MM-DD, or null.'),
+  "terms": zod.string(),
+  "notes": zod.string()
+})
+
+export const createQuotationResponseValidUntilRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const CreateQuotationResponse = zod.object({
+  "id": zod.number().int(),
+  "leadId": zod.number().int(),
+  "quotationNumber": zod.string(),
+  "status": zod.enum(['Draft', 'Generated']),
+  "currency": zod.string(),
+  "subtotal": zod.number(),
+  "discount": zod.number(),
+  "taxableAmount": zod.number(),
+  "taxRate": zod.number(),
+  "taxAmount": zod.number(),
+  "total": zod.number(),
+  "validUntil": zod.string().regex(createQuotationResponseValidUntilRegExp).nullable().describe('Calendar date as YYYY-MM-DD, or null.'),
+  "terms": zod.string(),
+  "notes": zod.string(),
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "productModel": zod.string(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "unit": zod.string(),
+  "unitPrice": zod.number(),
+  "discount": zod.number(),
+  "lineTotal": zod.number()
+})),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Get a quotation with its items
+ */
+export const GetQuotationParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const getQuotationResponseValidUntilRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const GetQuotationResponse = zod.object({
+  "id": zod.number().int(),
+  "leadId": zod.number().int(),
+  "quotationNumber": zod.string(),
+  "status": zod.enum(['Draft', 'Generated']),
+  "currency": zod.string(),
+  "subtotal": zod.number(),
+  "discount": zod.number(),
+  "taxableAmount": zod.number(),
+  "taxRate": zod.number(),
+  "taxAmount": zod.number(),
+  "total": zod.number(),
+  "validUntil": zod.string().regex(getQuotationResponseValidUntilRegExp).nullable().describe('Calendar date as YYYY-MM-DD, or null.'),
+  "terms": zod.string(),
+  "notes": zod.string(),
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "productModel": zod.string(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "unit": zod.string(),
+  "unitPrice": zod.number(),
+  "discount": zod.number(),
+  "lineTotal": zod.number()
+})),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update quotation items, tax, validity or terms (totals recalculated)
+ */
+export const UpdateQuotationParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const updateQuotationBodyItemsItemProductModelMax = 64;
+
+export const updateQuotationBodyItemsItemProductNameMax = 300;
+
+export const updateQuotationBodyItemsItemQuantityMin = 0;
+
+export const updateQuotationBodyItemsItemUnitMax = 32;
+
+export const updateQuotationBodyItemsItemUnitPriceMin = 0;
+
+export const updateQuotationBodyItemsItemDiscountMin = 0;
+export const updateQuotationBodyItemsItemDiscountMax = 100;
+
+
+export const updateQuotationBodyTaxRateMin = 0;
+export const updateQuotationBodyTaxRateMax = 100;
+
+export const updateQuotationBodyValidUntilRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const UpdateQuotationBody = zod.object({
+  "items": zod.array(zod.object({
+  "productModel": zod.string().max(updateQuotationBodyItemsItemProductModelMax),
+  "productName": zod.string().min(1).max(updateQuotationBodyItemsItemProductNameMax),
+  "quantity": zod.number().min(updateQuotationBodyItemsItemQuantityMin),
+  "unit": zod.string().min(1).max(updateQuotationBodyItemsItemUnitMax),
+  "unitPrice": zod.number().min(updateQuotationBodyItemsItemUnitPriceMin),
+  "discount": zod.number().min(updateQuotationBodyItemsItemDiscountMin).max(updateQuotationBodyItemsItemDiscountMax).describe('Line discount in percent.')
+})).min(1).optional(),
+  "taxRate": zod.number().min(updateQuotationBodyTaxRateMin).max(updateQuotationBodyTaxRateMax).optional(),
+  "validUntil": zod.string().regex(updateQuotationBodyValidUntilRegExp).nullish().describe('Calendar date as YYYY-MM-DD, or null.'),
+  "terms": zod.string().optional(),
+  "notes": zod.string().optional()
+})
+
+export const updateQuotationResponseValidUntilRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const UpdateQuotationResponse = zod.object({
+  "id": zod.number().int(),
+  "leadId": zod.number().int(),
+  "quotationNumber": zod.string(),
+  "status": zod.enum(['Draft', 'Generated']),
+  "currency": zod.string(),
+  "subtotal": zod.number(),
+  "discount": zod.number(),
+  "taxableAmount": zod.number(),
+  "taxRate": zod.number(),
+  "taxAmount": zod.number(),
+  "total": zod.number(),
+  "validUntil": zod.string().regex(updateQuotationResponseValidUntilRegExp).nullable().describe('Calendar date as YYYY-MM-DD, or null.'),
+  "terms": zod.string(),
+  "notes": zod.string(),
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "productModel": zod.string(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "unit": zod.string(),
+  "unitPrice": zod.number(),
+  "discount": zod.number(),
+  "lineTotal": zod.number()
+})),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Mark the quotation as Generated and record it on the lead
+ */
+export const GenerateQuotationParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const generateQuotationResponseValidUntilRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const GenerateQuotationResponse = zod.object({
+  "id": zod.number().int(),
+  "leadId": zod.number().int(),
+  "quotationNumber": zod.string(),
+  "status": zod.enum(['Draft', 'Generated']),
+  "currency": zod.string(),
+  "subtotal": zod.number(),
+  "discount": zod.number(),
+  "taxableAmount": zod.number(),
+  "taxRate": zod.number(),
+  "taxAmount": zod.number(),
+  "total": zod.number(),
+  "validUntil": zod.string().regex(generateQuotationResponseValidUntilRegExp).nullable().describe('Calendar date as YYYY-MM-DD, or null.'),
+  "terms": zod.string(),
+  "notes": zod.string(),
+  "items": zod.array(zod.object({
+  "id": zod.number().int(),
+  "productModel": zod.string(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "unit": zod.string(),
+  "unitPrice": zod.number(),
+  "discount": zod.number(),
+  "lineTotal": zod.number()
+})),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Render the saved quotation as a PDF
+ */
+export const GetQuotationPdfParams = zod.object({
+  "id": zod.coerce.number().int()
+})
+
+export const GetQuotationPdfResponse = zod.unknown()
 
 
 /**

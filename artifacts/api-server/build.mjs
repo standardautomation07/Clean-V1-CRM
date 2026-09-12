@@ -29,6 +29,8 @@ async function buildAll() {
     // - use path traversal to read files (e.g. @google-cloud/secret-manager loads sibling .proto files)
     external: [
       "*.node",
+      // pdfkit reads its font metric files from its own package directory at runtime
+      "pdfkit",
       "sharp",
       "better-sqlite3",
       "sqlite3",
