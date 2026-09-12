@@ -1,6 +1,6 @@
-# [Project name]
+# Clean V1 CRM
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A focused CRM for managing owner-scoped leads, follow-ups, activity history, and converted customers.
 
 ## Run & Operate
 
@@ -22,15 +22,22 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/crm` — React + Vite frontend and the shared CRM shell/pages.
+- `artifacts/api-server/src/routes/crm.ts` — authenticated CRM API routes and development seed.
+- `lib/api-spec/openapi.yaml` — source of truth for the generated API client and Zod schemas.
+- `lib/db/src/schema` — Drizzle tables for auth, leads, activities, and customers.
+- `lib/replit-auth-web` — browser auth hook for the Replit OIDC session.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Replit Auth uses an HTTP-only session cookie and every CRM query is scoped by the authenticated user ID.
+- Customers are a projection of Won leads and are synchronized when a lead changes stage.
+- Follow-up dates use PostgreSQL calendar dates rather than timestamps to avoid timezone shifts.
+- The frontend consumes generated OpenAPI hooks; auth state and redirects use the dedicated browser auth package.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Clean V1 CRM includes a responsive login flow, dashboard, searchable and filterable lead pipeline, lead detail/activity history, follow-up buckets, converted customer list, and account settings.
 
 ## User preferences
 
@@ -38,7 +45,9 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Run API codegen after changing `lib/api-spec/openapi.yaml`.
+- Development sample leads are inserted for the first authenticated user only when that user has no leads.
+- The database schema is pushed with `pnpm --filter @workspace/db run push`; production schema changes are handled by Publish.
 
 ## Pointers
 

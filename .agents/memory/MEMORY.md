@@ -1,0 +1,1 @@
+- [Generated client checks](generated-client-checks.md) — Orval's browser client requires iterable DOM types in its composite TypeScript project.

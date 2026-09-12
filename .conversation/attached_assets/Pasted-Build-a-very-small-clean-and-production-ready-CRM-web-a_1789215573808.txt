@@ -1,0 +1,225 @@
+Build a very small, clean and production-ready CRM web application.
+
+The application is a lightweight CRM for managing leads, customers and follow-ups.
+
+IMPORTANT:
+Do NOT build a huge enterprise CRM.
+Do NOT add unnecessary features.
+Keep the architecture clean and modular so we can expand it later.
+
+TECH STACK:
+- React
+- TypeScript
+- Tailwind CSS
+- Node.js backend
+- PostgreSQL database
+- Drizzle ORM
+- Replit Auth for authentication
+
+CORE V1 FEATURES:
+
+1. AUTHENTICATION
+- Login using Replit Auth.
+- Each user should have their own CRM data.
+- Do not expose one user's leads to another user.
+
+2. DASHBOARD
+Create a clean dashboard with:
+- Total Leads
+- New Leads
+- Follow-ups Today
+- Won Leads
+- Lost Leads
+- Recent Leads
+- Today's follow-ups
+
+3. LEADS
+Create a Leads page with a searchable and filterable table.
+
+Lead fields:
+- id
+- companyName
+- contactName
+- phone
+- email
+- source
+- requirement
+- estimatedValue
+- status
+- nextFollowUp
+- notes
+- createdAt
+- updatedAt
+- ownerId
+
+Lead statuses:
+- New
+- Contacted
+- Qualified
+- Proposal
+- Negotiation
+- Won
+- Lost
+
+Sources:
+- Website
+- WhatsApp
+- Phone
+- Email
+- Referral
+- Other
+
+Allow:
+- Create lead
+- Edit lead
+- Delete lead
+- Search leads
+- Filter by status
+- Filter by source
+- Sort by date
+- Open lead details
+
+4. LEAD DETAIL PAGE
+Create a clean lead detail page.
+
+Show:
+- Company
+- Contact person
+- Phone
+- Email
+- Requirement
+- Estimated value
+- Source
+- Status
+- Next follow-up
+- Notes
+- Created date
+
+Actions:
+- Edit
+- Add note
+- Change status
+- Set next follow-up
+- Mark Won
+- Mark Lost
+
+5. ACTIVITY / NOTES
+Create a simple activity history for each lead.
+
+Activities can include:
+- Note
+- Status change
+- Follow-up scheduled
+- Lead created
+
+Fields:
+- id
+- leadId
+- type
+- description
+- createdAt
+- createdBy
+
+6. FOLLOW-UPS
+Create a Follow-ups page.
+
+Sections:
+- Overdue
+- Today
+- Upcoming
+
+Each follow-up should show:
+- Lead/customer
+- Company
+- Date
+- Status
+- Quick action to open the lead
+
+7. CUSTOMERS
+When a lead becomes Won, it should appear in Customers.
+
+Customer fields can initially be derived from the lead:
+- Company
+- Contact
+- Phone
+- Email
+- Requirement
+- Value
+- Converted date
+
+8. UI/UX
+
+Create a modern professional CRM interface.
+
+Layout:
+- Left sidebar
+- Top header
+- Main content area
+
+Sidebar:
+Dashboard
+Leads
+Follow-ups
+Customers
+Settings
+
+Use a clean white/light interface with subtle borders, rounded cards and excellent spacing.
+
+The interface must be responsive.
+
+Do not make the UI visually complicated.
+
+9. DATABASE
+
+Create proper PostgreSQL tables using Drizzle.
+
+Tables:
+users
+leads
+activities
+customers
+
+Add appropriate indexes and foreign keys.
+
+10. DATA SECURITY
+
+Every query involving leads, activities and customers must be scoped to the authenticated user's ownerId/userId.
+
+A user must never be able to access another user's CRM records by changing an ID in the URL or API request.
+
+11. CODE QUALITY
+
+Use reusable components.
+
+Keep frontend and backend code organized.
+
+Use proper TypeScript types.
+
+Validate form inputs.
+
+Handle loading, empty and error states.
+
+Do not hardcode fake data once the database is connected.
+
+12. SEED DATA
+
+Create a small development seed dataset with around 5 sample leads so the UI can be tested.
+
+Make it easy to remove the seed data later.
+
+13. FINAL REQUIREMENT
+
+Before finishing:
+- Make sure the application runs successfully on Replit.
+- Make sure database migrations work.
+- Make sure authentication works.
+- Make sure CRUD operations work.
+- Make sure there are no TypeScript/build errors.
+- Test the major user flows.
+
+Do not add AI features yet.
+Do not add WhatsApp integration yet.
+Do not add email integration yet.
+Do not add quotation/invoice modules yet.
+
+Build only this V1 CRM foundation.

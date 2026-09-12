@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Clean V1 CRM"
+description = "A focused CRM for managing leads, follow-ups, activities, and converted customers with owner-scoped data."
+version = "1.0.0"
+id = "artifacts/crm"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22444
+
+[services.development]
+run = "pnpm --filter @workspace/crm run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/crm", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/crm/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22444"
+BASE_PATH = "/"

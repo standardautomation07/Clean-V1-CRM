@@ -10,6 +10,10 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: Auth
+    description: Browser and mobile authentication endpoints.
+  - name: CRM
+    description: Owner-scoped CRM operations.
 paths:
   /healthz:
     get:
@@ -24,7 +28,281 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      summary: Get the currently authenticated user
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationSessionHeader"
+        - $ref: "#/components/parameters/SessionCookie"
+      responses:
+        "200":
+          description: Auth status resolved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserEnvelope"
+  /login:
+    get:
+      tags: [Auth]
+      operationId: beginBrowserLogin
+      summary: Start the browser OIDC login flow
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to the OIDC authorization endpoint.
+  /callback:
+    get:
+      tags: [Auth]
+      operationId: handleBrowserLoginCallback
+      summary: Complete the browser OIDC login flow
+      responses:
+        "302":
+          description: Redirect after login.
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutBrowserSession
+      summary: Clear the session and begin OIDC logout
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationSessionHeader"
+        - $ref: "#/components/parameters/SessionCookie"
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+            default: /
+      responses:
+        "302":
+          description: Redirect after logout.
+  /mobile-auth/token-exchange:
+    post:
+      tags: [Auth]
+      operationId: exchangeMobileAuthorizationCode
+      summary: Exchange a mobile OIDC code for a session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MobileTokenExchangeRequest"
+      responses:
+        "200":
+          description: Session created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MobileTokenExchangeSuccess"
+  /mobile-auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logoutMobileSession
+      summary: Delete a mobile session token
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationSessionHeader"
+      responses:
+        "200":
+          description: Logout processed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LogoutSuccess"
+  /dashboard:
+    get:
+      tags: [CRM]
+      operationId: getDashboardSummary
+      summary: Get dashboard totals and recent CRM activity
+      responses:
+        "200":
+          description: Dashboard summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+  /leads:
+    get:
+      tags: [CRM]
+      operationId: listLeads
+      summary: List the authenticated user's leads
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/LeadStatus"
+        - name: source
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/LeadSource"
+        - name: sort
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [newest, oldest, follow_up]
+            default: newest
+      responses:
+        "200":
+          description: Lead list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Lead"
+    post:
+      tags: [CRM]
+      operationId: createLead
+      summary: Create a lead
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadInput"
+      responses:
+        "201":
+          description: Created lead.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+  /leads/{id}:
+    get:
+      tags: [CRM]
+      operationId: getLead
+      summary: Get a lead and its activity history
+      parameters:
+        - $ref: "#/components/parameters/LeadId"
+      responses:
+        "200":
+          description: Lead detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LeadDetail"
+    patch:
+      tags: [CRM]
+      operationId: updateLead
+      summary: Update a lead
+      parameters:
+        - $ref: "#/components/parameters/LeadId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LeadUpdate"
+      responses:
+        "200":
+          description: Updated lead.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Lead"
+    delete:
+      tags: [CRM]
+      operationId: deleteLead
+      summary: Delete a lead
+      parameters:
+        - $ref: "#/components/parameters/LeadId"
+      responses:
+        "204":
+          description: Lead deleted.
+  /leads/{id}/activities:
+    get:
+      tags: [CRM]
+      operationId: listLeadActivities
+      summary: List activities for a lead
+      parameters:
+        - $ref: "#/components/parameters/LeadId"
+      responses:
+        "200":
+          description: Activity history.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Activity"
+    post:
+      tags: [CRM]
+      operationId: createLeadActivity
+      summary: Add a note or activity to a lead
+      parameters:
+        - $ref: "#/components/parameters/LeadId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivityInput"
+      responses:
+        "201":
+          description: Created activity.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Activity"
+  /follow-ups:
+    get:
+      tags: [CRM]
+      operationId: listFollowUps
+      summary: List overdue, today, and upcoming follow-ups
+      responses:
+        "200":
+          description: Follow-up sections.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FollowUpSections"
+  /customers:
+    get:
+      tags: [CRM]
+      operationId: listCustomers
+      summary: List converted customers
+      responses:
+        "200":
+          description: Customer list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Customer"
 components:
+  parameters:
+    AuthorizationSessionHeader:
+      name: Authorization
+      in: header
+      required: false
+      schema:
+        type: string
+    SessionCookie:
+      name: sid
+      in: cookie
+      required: false
+      schema:
+        type: string
+    LeadId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
   schemas:
     HealthStatus:
       type: object
@@ -33,4 +311,174 @@ components:
           type: string
       required:
         - status
+    AuthUser:
+      type: object
+      required: [id, email, firstName, lastName, profileImageUrl]
+      properties:
+        id: { type: string }
+        email: { type: [string, "null"], format: email }
+        firstName: { type: [string, "null"] }
+        lastName: { type: [string, "null"] }
+        profileImageUrl: { type: [string, "null"] }
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - $ref: "#/components/schemas/AuthUser"
+            - type: "null"
+    MobileTokenExchangeRequest:
+      type: object
+      required: [code, code_verifier, redirect_uri, state]
+      properties:
+        code: { type: string, minLength: 1 }
+        code_verifier: { type: string, minLength: 1 }
+        redirect_uri: { type: string, minLength: 1, format: uri }
+        state: { type: string, minLength: 1 }
+        nonce: { type: [string, "null"], minLength: 1 }
+    MobileTokenExchangeSuccess:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string }
+    LogoutSuccess:
+      type: object
+      required: [success]
+      properties:
+        success: { type: boolean, const: true }
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    LeadStatus:
+      type: string
+      enum: [New, Contacted, Qualified, Proposal, Negotiation, Won, Lost]
+    LeadSource:
+      type: string
+      enum: [Website, WhatsApp, Phone, Email, Referral, Other]
+    Lead:
+      type: object
+      required: [id, companyName, contactName, phone, email, source, requirement, estimatedValue, status, nextFollowUp, notes, createdAt, updatedAt, ownerId]
+      properties:
+        id: { type: integer }
+        companyName: { type: string }
+        contactName: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        source: { $ref: "#/components/schemas/LeadSource" }
+        requirement: { type: string }
+        estimatedValue: { type: number }
+        status: { $ref: "#/components/schemas/LeadStatus" }
+        nextFollowUp: { type: [string, "null"], format: date }
+        notes: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        ownerId: { type: string }
+    LeadDetail:
+      type: object
+      required: [lead, activities]
+      properties:
+        lead: { $ref: "#/components/schemas/Lead" }
+        activities:
+          type: array
+          items: { $ref: "#/components/schemas/Activity" }
+    LeadInput:
+      type: object
+      required: [companyName, contactName, phone, email, source, requirement, estimatedValue, status, nextFollowUp, notes]
+      properties:
+        companyName: { type: string, minLength: 1 }
+        contactName: { type: string, minLength: 1 }
+        phone: { type: string }
+        email: { type: string, format: email }
+        source: { $ref: "#/components/schemas/LeadSource" }
+        requirement: { type: string }
+        estimatedValue: { type: number, minimum: 0 }
+        status: { $ref: "#/components/schemas/LeadStatus" }
+        nextFollowUp: { type: [string, "null"], format: date }
+        notes: { type: string }
+    LeadUpdate:
+      type: object
+      properties:
+        companyName: { type: string, minLength: 1 }
+        contactName: { type: string, minLength: 1 }
+        phone: { type: string }
+        email: { type: string, format: email }
+        source: { $ref: "#/components/schemas/LeadSource" }
+        requirement: { type: string }
+        estimatedValue: { type: number, minimum: 0 }
+        status: { $ref: "#/components/schemas/LeadStatus" }
+        nextFollowUp: { type: [string, "null"], format: date }
+        notes: { type: string }
+    Activity:
+      type: object
+      required: [id, leadId, type, description, createdAt, createdBy]
+      properties:
+        id: { type: integer }
+        leadId: { type: integer }
+        type:
+          type: string
+          enum: [Note, StatusChange, FollowUpScheduled, LeadCreated]
+        description: { type: string }
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: string }
+    ActivityInput:
+      type: object
+      required: [type, description]
+      properties:
+        type:
+          type: string
+          enum: [Note, StatusChange, FollowUpScheduled, LeadCreated]
+        description: { type: string, minLength: 1 }
+    FollowUp:
+      type: object
+      required: [id, companyName, contactName, nextFollowUp, status]
+      properties:
+        id: { type: integer }
+        companyName: { type: string }
+        contactName: { type: string }
+        nextFollowUp: { type: string, format: date }
+        status: { $ref: "#/components/schemas/LeadStatus" }
+    FollowUpSections:
+      type: object
+      required: [overdue, today, upcoming]
+      properties:
+        overdue:
+          type: array
+          items: { $ref: "#/components/schemas/FollowUp" }
+        today:
+          type: array
+          items: { $ref: "#/components/schemas/FollowUp" }
+        upcoming:
+          type: array
+          items: { $ref: "#/components/schemas/FollowUp" }
+    Customer:
+      type: object
+      required: [id, leadId, companyName, contactName, phone, email, requirement, value, convertedAt]
+      properties:
+        id: { type: integer }
+        leadId: { type: integer }
+        companyName: { type: string }
+        contactName: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        requirement: { type: string }
+        value: { type: number }
+        convertedAt: { type: string, format: date-time }
+    DashboardSummary:
+      type: object
+      required: [totalLeads, newLeads, followUpsToday, wonLeads, lostLeads, recentLeads, todaysFollowUps]
+      properties:
+        totalLeads: { type: integer }
+        newLeads: { type: integer }
+        followUpsToday: { type: integer }
+        wonLeads: { type: integer }
+        lostLeads: { type: integer }
+        recentLeads:
+          type: array
+          items: { $ref: "#/components/schemas/Lead" }
+        todaysFollowUps:
+          type: array
+          items: { $ref: "#/components/schemas/FollowUp" }
 
