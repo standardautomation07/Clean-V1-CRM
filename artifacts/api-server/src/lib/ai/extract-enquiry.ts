@@ -54,7 +54,7 @@ Rules:
 // JSON schema for structured output. Mirrors the ExtractedEnquiry schema in
 // lib/api-spec/openapi.yaml; the response is still validated with the generated
 // ExtractEnquiryResponse zod schema before it leaves the server.
-const OUTPUT_SCHEMA = {
+export const OUTPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
   required: ["companyName", "contactName", "phone", "email", "location", "items", "notes", "missingInformation"],
@@ -72,7 +72,9 @@ const OUTPUT_SCHEMA = {
         required: ["productHint", "category", "mentionedModel", "requiredCapacityKg", "quantity", "unit", "specifications"],
         properties: {
           productHint: { type: "string" },
-          category: { type: ["string", "null"], enum: [...PRODUCT_CATEGORIES, null] },
+          // Anthropic structured outputs reject an enum on a multi-type field, so the
+          // nullable enum is expressed as anyOf: a string enum branch or null.
+          category: { anyOf: [{ type: "string", enum: [...PRODUCT_CATEGORIES] }, { type: "null" }] },
           mentionedModel: { type: ["string", "null"] },
           requiredCapacityKg: { type: ["number", "null"] },
           quantity: { type: ["number", "null"] },

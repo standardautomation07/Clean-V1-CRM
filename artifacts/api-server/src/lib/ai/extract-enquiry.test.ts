@@ -4,12 +4,14 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { ExtractEnquiryBody, ExtractEnquiryResponse } from "@workspace/api-zod";
 
 import { matchEnquiryItems } from "../knowledge/match-items";
+import { PRODUCT_CATEGORIES } from "../knowledge/products";
 
 import {
   AiInvalidOutputError,
   AiNotConfiguredError,
   AiRequestError,
   extractEnquiry,
+  OUTPUT_SCHEMA,
   type CreateMessage,
 } from "./extract-enquiry";
 
@@ -64,6 +66,64 @@ function fakeModel(text: string, stopReason: Anthropic.StopReason = "end_turn"):
     context_management: null,
   } as unknown as Anthropic.Message);
 }
+
+// Walks every schema node so the checks cover nested objects and array items.
+function schemaNodes(node: unknown, path = "$"): Array<{ path: string; node: Record<string, unknown> }> {
+  if (!node || typeof node !== "object") return [];
+  const record = node as Record<string, unknown>;
+  const out = [{ path, node: record }];
+  for (const [key, value] of Object.entries(record)) {
+    if (key === "enum" || key === "required" || key === "type") continue;
+    if (Array.isArray(value)) value.forEach((child, i) => out.push(...schemaNodes(child, `${path}.${key}[${i}]`)));
+    else if (value && typeof value === "object") out.push(...schemaNodes(value, `${path}.${key}`));
+  }
+  return out;
+}
+
+describe("Anthropic structured-output schema (OUTPUT_SCHEMA)", () => {
+  it("never declares an enum on a multi-type node (the 400 Anthropic returned)", () => {
+    for (const { path, node } of schemaNodes(OUTPUT_SCHEMA)) {
+      if ("enum" in node) {
+        assert.equal(typeof node.type, "string", `${path}: enum must sit on a single-type node, got ${JSON.stringify(node.type)}`);
+        assert.ok((node.enum as unknown[]).every((v) => typeof v === node.type), `${path}: every enum value must match type ${String(node.type)}`);
+      }
+    }
+  });
+
+  it("allows category to be exactly a Rollvento catalogue category or null", () => {
+    const category = OUTPUT_SCHEMA.properties.items.items.properties.category as unknown as { anyOf: Array<Record<string, unknown>> };
+    assert.ok(Array.isArray(category.anyOf));
+    const stringBranch = category.anyOf.find((b) => b.type === "string");
+    const nullBranch = category.anyOf.find((b) => b.type === "null");
+    assert.ok(stringBranch && nullBranch, "category must offer a string branch and a null branch");
+    assert.deepEqual(stringBranch.enum, [...PRODUCT_CATEGORIES]);
+    assert.ok(!("enum" in nullBranch));
+  });
+
+  it("keeps mentionedModel as string-or-null and every object closed", () => {
+    const item = OUTPUT_SCHEMA.properties.items.items;
+    assert.deepEqual(item.properties.mentionedModel, { type: ["string", "null"] });
+    for (const { path, node } of schemaNodes(OUTPUT_SCHEMA)) {
+      if (node.type === "object") {
+        assert.equal(node.additionalProperties, false, `${path}: objects must be closed`);
+        assert.deepEqual([...(node.required as string[])].sort(), Object.keys(node.properties as object).sort(), `${path}: all properties must be required`);
+      }
+    }
+  });
+
+  it("has no price, amount or total field anywhere", () => {
+    for (const { path, node } of schemaNodes(OUTPUT_SCHEMA)) {
+      for (const key of Object.keys((node.properties as object | undefined) ?? {})) assert.ok(!/price|amount|total|cost|gst|tax/i.test(key), `${path}.${key}`);
+    }
+  });
+
+  it("matches the generated Zod response schema field for field", () => {
+    const zodKeys = Object.keys(ExtractedEnquirySchema.shape).sort();
+    assert.deepEqual(Object.keys(OUTPUT_SCHEMA.properties).sort(), zodKeys);
+    const zodItemKeys = Object.keys(ExtractedEnquirySchema.shape.items.element.shape).sort();
+    assert.deepEqual(Object.keys(OUTPUT_SCHEMA.properties.items.items.properties).sort(), zodItemKeys);
+  });
+});
 
 describe("ExtractEnquiryBody (request validation)", () => {
   it("rejects an empty requirement", () => {
