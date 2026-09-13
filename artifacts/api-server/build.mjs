@@ -3,19 +3,23 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { rm } from "node:fs/promises";
+import { cp, mkdir, rm } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
 
 const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 
+// Packages that must stay external in the long-running server build (see the
+// list below). The serverless build bundles pdfkit instead and ships its font
+// metric files next to the bundle, so the function needs no node_modules.
+const SERVERLESS_BUNDLED = new Set(["pdfkit", "@swc/*"]);
+
 async function buildAll() {
   const distDir = path.resolve(artifactDir, "dist");
   await rm(distDir, { recursive: true, force: true });
 
-  await esbuild({
-    entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+  const shared = {
     platform: "node",
     bundle: true,
     format: "esm",
@@ -104,10 +108,6 @@ async function buildAll() {
       "electron",
     ],
     sourcemap: "linked",
-    plugins: [
-      // pino relies on workers to handle logging, instead of externalizing it we use a plugin to handle it
-      esbuildPluginPino({ transports: ["pino-pretty"] })
-    ],
     // Make sure packages that are cjs only (e.g. express) but are bundled continue to work in our esm output file
     banner: {
       js: `import { createRequire as __bannerCrReq } from 'node:module';
@@ -119,7 +119,30 @@ globalThis.__filename = __bannerUrl.fileURLToPath(import.meta.url);
 globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
     `,
     },
+  };
+
+  // 1. Long-running server (Replit / local): dist/index.mjs
+  await esbuild({
+    ...shared,
+    entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+    // pino relies on workers to handle logging, instead of externalizing it we use a plugin to handle it
+    plugins: [esbuildPluginPino({ transports: ["pino-pretty"] })],
   });
+
+  // 2. Serverless handler (Vercel): dist/vercel.mjs, exports the Express app.
+  await esbuild({
+    ...shared,
+    entryPoints: [path.resolve(artifactDir, "src/vercel.ts")],
+    external: shared.external.filter((name) => !SERVERLESS_BUNDLED.has(name)),
+    plugins: [esbuildPluginPino({ transports: [] })],
+  });
+  // pdfkit reads its AFM font metrics from <__dirname>/data at runtime; with the
+  // banner above __dirname is the dist directory, so ship the fonts there.
+  const pdfkitData = path.dirname(globalThis.require.resolve("pdfkit/js/data/Helvetica.afm"));
+  await mkdir(path.resolve(distDir, "data"), { recursive: true });
+  await cp(pdfkitData, path.resolve(distDir, "data"), { recursive: true });
+  // The Rollvento product knowledge file is resolved relative to the bundle location.
+  await cp(path.resolve(artifactDir, "../../data/rollvento-products.json"), path.resolve(distDir, "data/rollvento-products.json"));
 }
 
 buildAll().catch((err) => {
