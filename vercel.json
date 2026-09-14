@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter @workspace/api-server run build && PORT=3000 BASE_PATH=/ pnpm --filter @workspace/crm run build && rm -rf public && cp -r artifacts/crm/dist/public public",
+  "buildCommand": "pnpm --filter @workspace/api-server run build && PORT=3000 BASE_PATH=/ pnpm --filter @workspace/crm run build && ROOT=$(pnpm --silent -w exec pwd) && rm -rf public && cp -r \"$ROOT/artifacts/crm/dist/public\" public",
   "outputDirectory": "public",
   "functions": {
     "api/index.mjs": {
