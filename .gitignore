@@ -50,3 +50,5 @@ Thumbs.db
 
 # Vercel build output (copied from artifacts/crm/dist/public by vercel.json buildCommand)
 /public
+
+.vercel
