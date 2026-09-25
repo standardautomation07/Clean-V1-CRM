@@ -15,8 +15,11 @@ const pg = require("pg");
 
 function withSsl(url) {
   if (!url) return url;
-  if (/[?&]sslmode=/i.test(url)) return url;
-  return url.includes("?") ? `${url}&sslmode=require` : `${url}?sslmode=require`;
+  // node-pg treats sslmode=require as verify-full unless uselibpqcompat is set
+  // (Supabase pooler presents a chain that fails verify-full on Vercel).
+  if (/[?&]uselibpqcompat=/i.test(url)) return url;
+  const join = url.includes("?") ? "&" : "?";
+  return `${url}${join}uselibpqcompat=true&sslmode=require`;
 }
 
 const raw = process.env.DATABASE_URL;
