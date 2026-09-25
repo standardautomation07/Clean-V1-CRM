@@ -10,10 +10,26 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
+function stripSslQuery(url: string) {
+  try {
+    const u = new URL(url);
+    for (const key of [...u.searchParams.keys()]) {
+      if (/^ssl/i.test(key) || key.toLowerCase() === "uselibpqcompat") {
+        u.searchParams.delete(key);
+      }
+    }
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: stripSslQuery(process.env.DATABASE_URL),
   // Required for Supabase transaction pooler (and similar PgBouncer setups)
   prepare: false,
+  // Supabase pooler cert chain fails verify-full on Vercel/node-pg
+  ssl: { rejectUnauthorized: false },
 });
 export const db = drizzle(pool, { schema });
 
