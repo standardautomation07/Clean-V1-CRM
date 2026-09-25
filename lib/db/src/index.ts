@@ -10,7 +10,11 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  // Required for Supabase transaction pooler (and similar PgBouncer setups)
+  prepare: false,
+});
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";
