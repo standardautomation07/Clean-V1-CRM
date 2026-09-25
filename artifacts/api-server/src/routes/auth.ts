@@ -156,7 +156,7 @@ router.get('/login', async (req: Request, res: Response) => {
   setOidcCookie(res, 'state', state);
   setOidcCookie(res, 'return_to', returnTo);
 
-  res.redirect(redirectTo.href);
+  res.redirect(303, redirectTo.href);
 });
 
 // Query params are not validated because the OIDC provider may include
@@ -170,7 +170,7 @@ router.get('/callback', async (req: Request, res: Response) => {
   const expectedState = req.cookies?.state;
 
   if (!codeVerifier || !expectedState) {
-    res.redirect('/api/login');
+    res.redirect(303, '/api/login');
     return;
   }
 
@@ -187,7 +187,7 @@ router.get('/callback', async (req: Request, res: Response) => {
       idTokenExpected: true,
     });
   } catch {
-    res.redirect('/api/login');
+    res.redirect(303, '/api/login');
     return;
   }
 
@@ -200,7 +200,7 @@ router.get('/callback', async (req: Request, res: Response) => {
 
   const claims = tokens.claims();
   if (!claims) {
-    res.redirect('/api/login');
+    res.redirect(303, '/api/login');
     return;
   }
 
@@ -222,7 +222,7 @@ router.get('/callback', async (req: Request, res: Response) => {
 
   const sid = await createSession(sessionData);
   setSessionCookie(res, sid);
-  res.redirect(returnTo);
+  res.redirect(303, returnTo);
 });
 
 router.get('/logout', async (req: Request, res: Response) => {
@@ -239,7 +239,7 @@ router.get('/logout', async (req: Request, res: Response) => {
     post_logout_redirect_uri: postLogoutRedirectUrl,
   });
 
-  res.redirect(endSessionUrl.href);
+  res.redirect(303, endSessionUrl.href);
 });
 
 router.post(

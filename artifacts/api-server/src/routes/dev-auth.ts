@@ -53,12 +53,12 @@ router.get('/login', async (req: Request, res: Response) => {
 
   // Plain http on localhost, so the cookie cannot be marked secure.
   res.cookie(SESSION_COOKIE, sid, { httpOnly: true, secure: false, sameSite: 'lax', path: '/', maxAge: SESSION_TTL });
-  res.redirect(getSafeReturnTo(req.query.returnTo));
+  res.redirect(303, getSafeReturnTo(req.query.returnTo));
 });
 
 router.get('/logout', async (req: Request, res: Response) => {
   await clearSession(res, getSessionId(req));
-  res.redirect(getSafeReturnTo(req.query.returnTo));
+  res.redirect(303, getSafeReturnTo(req.query.returnTo));
 });
 
 export default router;

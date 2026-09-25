@@ -81,7 +81,7 @@ router.post('/login', async (req: Request, res: Response) => {
   if (!passwordMatches(password)) {
     // Slow down guessing a little; the password is the only secret here.
     await new Promise((resolve) => setTimeout(resolve, 750));
-    res.redirect(`/api/login?error=1&returnTo=${encodeURIComponent(returnTo)}`);
+    res.redirect(303, `/api/login?error=1&returnTo=${encodeURIComponent(returnTo)}`);
     return;
   }
   const [user] = await db
@@ -94,12 +94,12 @@ router.post('/login', async (req: Request, res: Response) => {
     access_token: 'site-password',
   });
   res.cookie(SESSION_COOKIE, sid, { httpOnly: true, secure: req.secure || req.headers['x-forwarded-proto'] === 'https', sameSite: 'lax', path: '/', maxAge: SESSION_TTL });
-  res.redirect(returnTo);
+  res.redirect(303, returnTo);
 });
 
 router.get('/logout', async (req: Request, res: Response) => {
   await clearSession(res, getSessionId(req));
-  res.redirect(getSafeReturnTo(req.query.returnTo));
+  res.redirect(303, getSafeReturnTo(req.query.returnTo));
 });
 
 export default router;
