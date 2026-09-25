@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Apply CRM Postgres schema during Vercel build.
- * Uses node-pg with prepare:false + SSL (Supabase pooler friendly).
+ * Uses node-pg with prepare:false + ssl.rejectUnauthorized=false (Supabase).
  * Never prints DATABASE_URL.
  */
 import { createRequire } from "node:module";
@@ -13,13 +13,19 @@ const root = path.resolve(__dirname, "..");
 const require = createRequire(path.join(root, "lib/db/package.json"));
 const pg = require("pg");
 
-function withSsl(url) {
+function stripSslQuery(url) {
   if (!url) return url;
-  // node-pg treats sslmode=require as verify-full unless uselibpqcompat is set
-  // (Supabase pooler presents a chain that fails verify-full on Vercel).
-  if (/[?&]uselibpqcompat=/i.test(url)) return url;
-  const join = url.includes("?") ? "&" : "?";
-  return `${url}${join}uselibpqcompat=true&sslmode=require`;
+  try {
+    const u = new URL(url);
+    for (const key of [...u.searchParams.keys()]) {
+      if (/^ssl/i.test(key) || key.toLowerCase() === "uselibpqcompat") {
+        u.searchParams.delete(key);
+      }
+    }
+    return u.toString();
+  } catch {
+    return url;
+  }
 }
 
 const raw = process.env.DATABASE_URL;
@@ -28,7 +34,7 @@ if (!raw) {
   process.exit(1);
 }
 
-const connectionString = withSsl(raw);
+const connectionString = stripSslQuery(raw);
 const pool = new pg.Pool({
   connectionString,
   prepare: false,
