@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 
 type Tool = { name: string; description: string; risk: string; requiresApproval: boolean };
 type Approval = { id: number; toolName: string; risk: string; status: string; input: unknown; requestedAt: string };
+type Enrichment = { companyName: string; website?: string; location?: string; sources: Array<{ title: string; url: string; content: string; score: number | null }>; socialProfiles: string[]; contactEvidence: Array<{ title: string; url: string; content: string; score: number | null }>; servicesAndSignals: string[]; rollventoFit?: { category?: string | null; candidates?: Array<{ product?: { model?: string; productName?: string; category?: string }; score?: number; reason?: string }>; questions?: string[] } | null; };
 type Candidate = {
   companyName: string;
   contactName?: string;
@@ -36,7 +37,7 @@ export function NovaCommandCenter() {
   const [command, setCommand] = useState("");
   const [result, setResult] = useState<unknown>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [running, setRunning] = useState(false);
+  const [running, setRunning] = useState(false);\n  const [enrichment, setEnrichment] = useState<Record<string, Enrichment>>({});
   const [loading, setLoading] = useState(true);
 
   async function loadApprovals() {
@@ -79,6 +80,32 @@ export function NovaCommandCenter() {
       });
       setResult(await response.json());
       await loadApprovals();
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  async function enrichCandidate(candidate: Candidate) {
+    setRunning(true);
+    try {
+      const response = await fetch("/api/nova/execute", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tool: "hunter_enrich_prospect",
+          input: {
+            companyName: candidate.companyName,
+            website: candidate.website,
+            location: candidate.location,
+            requirement: candidate.requirement,
+            productHint: candidate.requirement,
+          },
+        }),
+      });
+      const data = await response.json();
+      if (data.ok && data.data) setEnrichment((current) => ({ ...current, [candidate.companyName]: data.data }));
+      else setResult(data);
     } finally {
       setRunning(false);
     }
@@ -167,6 +194,7 @@ export function NovaCommandCenter() {
                 {candidate.website && <a href={candidate.website} target="_blank" rel="noreferrer" className="mt-3 inline-flex max-w-full items-center gap-1 truncate text-xs font-semibold text-primary hover:underline">{candidate.website}<ExternalLink className="size-3 shrink-0" /></a>}
                 {candidate.evidence && <p className="mt-3 line-clamp-4 text-xs leading-relaxed text-muted-foreground">{candidate.evidence}</p>}
                 <div className="mt-4 flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="outline" disabled={running} onClick={() => enrichCandidate(candidate)}><Sparkles className="size-3" />{enrichment[candidate.companyName] ? "Enriched" : "Enrich"}</Button>
                   {candidate.sourceUrl && <a href={candidate.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 rounded-lg bg-muted px-2.5 py-1.5 text-[10px] font-semibold"><Search className="size-3" />Source</a>}
                   {duplicate && <span className="rounded-lg bg-muted px-2.5 py-1.5 text-[10px]">CRM #{candidate.duplicate?.id}</span>}
                   {!duplicate && candidate.importable && <span className="rounded-lg bg-emerald-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-emerald-700">Eligible for approval</span>}
