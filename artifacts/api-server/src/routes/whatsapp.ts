@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 const router: IRouter = Router();
 
 function verifySignature(rawBody: Buffer, signature: string | undefined, secret: string | undefined) {
-  if (!secret) return true;
+  if (!secret) return false;
   if (!signature?.startsWith("sha256=")) return false;
   const expected = crypto.createHmac("sha256", secret).update(rawBody).digest("hex");
   const received = signature.slice("sha256=".length);
@@ -37,7 +37,11 @@ router.get("/whatsapp/webhook", (req, res): void => {
 });
 
 router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
-  const raw = Buffer.from(JSON.stringify(req.body));
+  const raw = (req as typeof req & { rawBody?: Buffer }).rawBody;
+  if (!raw) {
+    res.status(400).json({ error: "Raw request body unavailable" });
+    return;
+  }
   if (!verifySignature(raw, req.header("x-hub-signature-256"), process.env.WHATSAPP_APP_SECRET?.trim())) {
     res.status(401).json({ error: "Invalid webhook signature" });
     return;
