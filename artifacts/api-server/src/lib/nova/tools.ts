@@ -87,7 +87,122 @@ const getLead: NovaTool = {
   },
 };
 
-const calculateQuotationPreview: NovaTool = {
+
+const salesQualifyEnquiry: NovaTool = {
+  name: "sales_qualify_enquiry",
+  description: "Qualify a customer requirement using deterministic Rollvento product matching and return the information still needed before quotation.",
+  risk: "read",
+  requiresApproval: false,
+  async execute(input) {
+    const value = (input ?? {}) as { requirement?: string };
+    const requirement = value.requirement?.trim();
+    if (!requirement) return fail(this.name, "requirement is required");
+
+    const match = matchProductsToEnquiry({
+      productHint: requirement,
+      category: null,
+      mentionedModel: null,
+      requiredCapacityKg: null,
+      specifications: [],
+    });
+
+    return ok(this.name, {
+      requirement,
+      category: match.category,
+      candidates: match.candidates,
+      questions: match.questions,
+      unknownModel: match.unknownModel,
+      noMatchReason: match.noMatchReason,
+      readyForQuotation: match.candidates.length === 1 && match.questions.length === 0,
+      nextStep: match.questions.length ? "Collect the missing requirement details before preparing a quotation." : "Confirm the exact model and commercial price before requesting quotation creation.",
+    });
+  },
+};
+
+const salesPrepareQuotation: NovaTool = {
+  name: "sales_prepare_quotation",
+  description: "Prepare a quotation package from a CRM lead and customer requirement. Uses only exact Rollvento catalogue models; does not write a quotation or invent pricing.",
+  risk: "financial",
+  requiresApproval: false,
+  async execute(input, context) {
+    const value = (input ?? {}) as {
+      leadId?: number;
+      requirement?: string;
+      productModel?: string;
+      quantity?: number;
+      unitPrice?: number;
+      discount?: number;
+      taxRate?: number;
+    };
+    const leadId = Number(value.leadId);
+    if (!Number.isInteger(leadId) || leadId <= 0) return fail(this.name, "valid leadId is required");
+    if (!value.requirement?.trim() && !value.productModel?.trim()) return fail(this.name, "requirement or productModel is required");
+
+    const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, leadId), eq(leadsTable.ownerId, context.ownerId)));
+    if (!lead) return fail(this.name, "Lead not found");
+
+    let product = value.productModel ? getProductByModel(value.productModel) : undefined;
+    const qualification = value.requirement ? matchProductsToEnquiry({
+      productHint: value.requirement,
+      category: null,
+      mentionedModel: null,
+      requiredCapacityKg: null,
+      specifications: [],
+    }) : null;
+
+    if (!product && qualification?.candidates.length === 1) product = qualification.candidates[0].product;
+    if (!product) {
+      return ok(this.name, {
+        lead: { id: lead.id, companyName: lead.companyName, contactName: lead.contactName },
+        qualification,
+        readyForQuotation: false,
+        reason: "An exact catalogue model could not be selected yet.",
+      });
+    }
+
+    if (!Number.isFinite(value.quantity) || Number(value.quantity) <= 0) {
+      return ok(this.name, {
+        lead: { id: lead.id, companyName: lead.companyName, contactName: lead.contactName },
+        product: { model: product.model, productName: product.productName, category: product.category },
+        qualification,
+        readyForQuotation: false,
+        missing: ["quantity"],
+      });
+    }
+
+    if (!Number.isFinite(value.unitPrice) || Number(value.unitPrice) < 0) {
+      return ok(this.name, {
+        lead: { id: lead.id, companyName: lead.companyName, contactName: lead.contactName },
+        product: { model: product.model, productName: product.productName, category: product.category },
+        qualification,
+        readyForQuotation: false,
+        missing: ["unitPrice"],
+        note: "Unit price must be supplied by an authorized user; NOVA never invents commercial pricing.",
+      });
+    }
+
+    const item: QuotationItemInput = {
+      productModel: product.model,
+      productName: product.productName,
+      quantity: Number(value.quantity),
+      unit: "Nos",
+      unitPrice: Number(value.unitPrice),
+      discount: Number.isFinite(value.discount) ? Number(value.discount) : 0,
+    };
+    const calculation = calculateQuotation([item], Number.isFinite(value.taxRate) ? Number(value.taxRate) : 18);
+
+    return ok(this.name, {
+      lead: { id: lead.id, companyName: lead.companyName, contactName: lead.contactName, phone: lead.phone, email: lead.email },
+      product: { model: product.model, productName: product.productName, category: product.category },
+      qualification,
+      item,
+      calculation,
+      readyForQuotation: true,
+      nextStep: "Submit create_quotation with this exact item for approval.",
+    });
+  },
+};
+\nconst calculateQuotationPreview: NovaTool = {
   name: "calculate_quotation_preview",
   description: "Calculate quotation totals without writing a financial document.",
   risk: "financial",
