@@ -8,7 +8,8 @@ import {
   type ProductCategory,
 } from "../knowledge/products";
 import { calculateQuotation, type QuotationItemInput } from "../quotations/calc";
-import type { NovaTool, NovaToolContext, NovaToolResult } from "./types";
+import { commercialNovaTools } from "./commercial";
+import type { NovaTool, NovaToolResult } from "./types";
 
 function ok<T>(tool: string, data: T): NovaToolResult<T> {
   return { ok: true, tool, data };
@@ -99,7 +100,15 @@ const calculateQuotationPreview: NovaTool = {
   },
 };
 
-export const novaTools: NovaTool[] = [searchProducts, getProduct, matchRequirement, listLeads, getLead, calculateQuotationPreview];
+export const novaTools: NovaTool[] = [
+  searchProducts,
+  getProduct,
+  matchRequirement,
+  listLeads,
+  getLead,
+  calculateQuotationPreview,
+  ...commercialNovaTools,
+];
 
 export function getNovaTool(name: string): NovaTool | undefined {
   return novaTools.find((tool) => tool.name === name);
