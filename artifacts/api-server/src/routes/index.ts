@@ -7,6 +7,7 @@ import productsRouter from "./products";
 import quotationsRouter from "./quotations";
 import documentsRouter from "./documents";
 import novaRouter from "./nova";
+import whatsappRouter from "./whatsapp";
 import devAuthRouter, { isLocalDevAuthEnabled } from "./dev-auth";
 import passwordAuthRouter, { isPasswordAuthEnabled } from "./password-auth";
 
@@ -22,5 +23,6 @@ router.use(productsRouter);
 router.use(quotationsRouter);
 router.use(documentsRouter);
 router.use(novaRouter);
+router.use(whatsappRouter);
 
 export default router;
