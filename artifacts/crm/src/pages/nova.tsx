@@ -206,6 +206,25 @@ export function NovaCommandCenter() {
     }
   }
 
+  async function requestGenerateQuotation() {
+    if (!result || typeof result !== "object") return;
+    const data = (result as { data?: any }).data;
+    if (!data?.id || !String(data?.quotationNumber ?? "").startsWith("RV-")) return;
+    setRunning(true);
+    try {
+      const response = await fetch("/api/nova/execute", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tool: "generate_quotation", input: { quotationId: data.id } }),
+      });
+      setResult(await response.json());
+      await loadApprovals();
+    } finally {
+      setRunning(false);
+    }
+  }
+
   async function decide(id: number, action: "approve" | "reject") {
     const response = await fetch(`/api/nova/approvals/${id}/${action}`, {
       method: "POST",
@@ -281,6 +300,8 @@ export function NovaCommandCenter() {
     {result !== null && campaign.length === 0 && <section className="mt-6 rounded-xl border border-border bg-card p-5">
       <pre className="max-h-72 overflow-auto rounded-xl bg-muted/60 p-4 text-xs">{JSON.stringify(result, null, 2)}</pre>
       {typeof result === "object" && result !== null && (result as { data?: any }).data?.readyForQuotation && <div className="mt-4"><Button disabled={running} onClick={requestQuotationFromResult}><ShieldCheck className="size-4" />Request quotation approval</Button></div>}
+      {typeof result === "object" && result !== null && (result as { data?: any }).data?.status === "Draft" && (result as { data?: any }).data?.quotationNumber && <div className="mt-4"><Button disabled={running} onClick={requestGenerateQuotation}><ShieldCheck className="size-4" />Request PDF generation approval</Button></div>}
+      {typeof result === "object" && result !== null && (result as { data?: any }).data?.pdfPath && <div className="mt-4"><a href={(result as { data: any }).data.pdfPath} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-primary hover:bg-muted"><ExternalLink className="size-4" />Open quotation PDF</a></div>}
     </section>}
 
     <section className="mt-6 rounded-2xl border border-border bg-card p-5 md:p-7">
