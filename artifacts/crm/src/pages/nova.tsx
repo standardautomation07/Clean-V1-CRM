@@ -200,6 +200,23 @@ export function NovaCommandCenter() {
                   {!duplicate && candidate.importable && <span className="rounded-lg bg-emerald-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-emerald-700">Eligible for approval</span>}
                   {!candidate.importable && <span className="rounded-lg bg-amber-500/10 px-2.5 py-1.5 text-[10px] font-semibold text-amber-700">Needs contact/website data</span>}
                 </div>
+                {enrichment[candidate.companyName] && <div className="mt-4 rounded-lg bg-muted/40 p-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Research enrichment</div>
+                  <div className="mt-2 grid gap-3 md:grid-cols-2">
+                    <div>
+                      <div className="text-[10px] font-semibold">Services & signals</div>
+                      <ul className="mt-1 space-y-1 text-[10px] text-muted-foreground">
+                        {enrichment[candidate.companyName].servicesAndSignals.slice(0, 3).map((item, index) => <li key={index}>{item}</li>)}
+                      </ul>
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-semibold">Rollvento catalogue fit</div>
+                      {enrichment[candidate.companyName].rollventoFit?.candidates?.length ? <div className="mt-1 space-y-1">{enrichment[candidate.companyName].rollventoFit.candidates.slice(0, 3).map((fit, index) => <div key={index} className="text-[10px]"><span className="font-semibold">{fit.product?.model}</span> — {fit.product?.productName}</div>)}</div> : <div className="mt-1 text-[10px] text-muted-foreground">No deterministic catalogue match yet.</div>}
+                    </div>
+                  </div>
+                  {enrichment[candidate.companyName].socialProfiles.length > 0 && <div className="mt-2 text-[10px] text-muted-foreground">Social profiles found: {enrichment[candidate.companyName].socialProfiles.length}</div>}
+                  {enrichment[candidate.companyName].sources.length > 0 && <div className="mt-2 text-[10px] text-muted-foreground">{enrichment[candidate.companyName].sources.length} research sources collected.</div>}
+                </div>}
               </div>
             </div>
           </article>;
