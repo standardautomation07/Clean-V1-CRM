@@ -14,6 +14,7 @@ type HunterProspect = {
   sourceUrl?: string;
   evidence?: string;
   fitReason?: string;
+  enrichment?: unknown;
 };
 
 type TavilyResult = {
@@ -358,6 +359,7 @@ const hunterCreateLead: NovaTool = {
       p.sourceUrl ? `Source: ${p.sourceUrl}` : "",
       p.evidence ? `Evidence: ${p.evidence}` : "",
       p.fitReason ? `Fit: ${p.fitReason}` : "",
+      p.enrichment ? `Enrichment: ${JSON.stringify(p.enrichment).slice(0, 12000)}` : "",
     ].filter(Boolean).join("\n");
 
     const [lead] = await db.insert(leadsTable).values({
