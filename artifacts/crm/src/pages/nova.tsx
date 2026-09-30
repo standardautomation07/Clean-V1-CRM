@@ -129,6 +129,7 @@ export function NovaCommandCenter() {
           sourceUrl: candidate.sourceUrl,
           evidence: candidate.evidence,
           fitReason: candidate.fitReason,
+          enrichment: enrichment[candidate.companyName] ?? null,
         },
       }),
     });
