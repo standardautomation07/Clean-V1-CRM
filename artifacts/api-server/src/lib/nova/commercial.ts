@@ -64,6 +64,40 @@ const createQuotation: NovaTool = {
   },
 };
 
+const generateQuotation: NovaTool = {
+  name: "generate_quotation",
+  description: "Finalize an owned Draft quotation as Generated so its official quotation PDF can be issued. Requires human approval.",
+  risk: "financial",
+  requiresApproval: true,
+  async execute(input, context) {
+    const quotationId = Number((input as { quotationId?: number } | undefined)?.quotationId);
+    if (!Number.isInteger(quotationId) || quotationId <= 0) return fail(this.name, "valid quotationId is required");
+    const [quotation] = await db.select().from(quotationsTable).where(and(eq(quotationsTable.id, quotationId), eq(quotationsTable.ownerId, context.ownerId)));
+    if (!quotation) return fail(this.name, "Quotation not found");
+    if (quotation.status !== "Draft") return fail(this.name, `Quotation is already ${quotation.status}`);
+    const items = await db.select().from(quotationItemsTable).where(eq(quotationItemsTable.quotationId, quotation.id));
+    if (!items.length) return fail(this.name, "Quotation has no items");
+    const [updated] = await db.update(quotationsTable).set({ status: "Generated", updatedAt: new Date() }).where(and(eq(quotationsTable.id, quotation.id), eq(quotationsTable.ownerId, context.ownerId))).returning();
+    await db.insert(activitiesTable).values({
+      leadId: quotation.leadId,
+      createdBy: context.ownerId,
+      type: "Quotation",
+      description: `Quotation ${updated.quotationNumber} generated for INR ${money(updated.total).toLocaleString("en-IN", { minimumFractionDigits: 2 })}.`,
+    });
+    return {
+      ok: true,
+      tool: this.name,
+      data: {
+        id: updated.id,
+        quotationNumber: updated.quotationNumber,
+        status: updated.status,
+        total: money(updated.total),
+        pdfPath: `/api/quotations/${updated.id}/pdf`,
+      },
+    };
+  },
+};
+
 const createSalesOrder: NovaTool = {
   name: "create_sales_order", description: "Create a Sales Order from an owned generated quotation. Requires human approval.",
   risk: "financial", requiresApproval: true,
@@ -144,4 +178,4 @@ const createInvoice: NovaTool = {
   },
 };
 
-export const commercialNovaTools: NovaTool[] = [createQuotation, createSalesOrder, createDeliveryChallan, createInvoice];
+export const commercialNovaTools: NovaTool[] = [createQuotation, generateQuotation, createSalesOrder, createDeliveryChallan, createInvoice];
