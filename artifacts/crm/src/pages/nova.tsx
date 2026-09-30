@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
-import { ArrowLeft, Bot, CheckCircle2, ExternalLink, FileText, Search, ShieldCheck, Sparkles, Users, XCircle } from "lucide-react";
+import { ArrowLeft, Bot, CheckCircle2, Clock3, ExternalLink, FileText, MessageCircle, Search, ShieldCheck, Sparkles, Users, XCircle } from "lucide-react";
 import { AppShell, PageHeading, SkeletonBlock } from "@/components/crm-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
