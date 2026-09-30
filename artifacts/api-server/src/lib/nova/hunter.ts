@@ -15,6 +15,85 @@ type HunterProspect = {
   fitReason?: string;
 };
 
+type TavilyResult = {
+  title?: string;
+  url?: string;
+  content?: string;
+  score?: number;
+};
+
+async function tavilySearch(query: string, maxResults: number) {
+  const apiKey = process.env.TAVILY_API_KEY;
+  if (!apiKey) throw new Error("TAVILY_API_KEY is not configured on the API server.");
+
+  const response = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      api_key: apiKey,
+      query,
+      search_depth: "advanced",
+      max_results: Math.min(Math.max(maxResults, 1), 25),
+      include_answer: false,
+      include_raw_content: false,
+    }),
+  });
+
+  if (!response.ok) throw new Error(`Tavily search failed: ${response.status}`);
+  const payload = (await response.json()) as { results?: TavilyResult[] };
+  return payload.results ?? [];
+}
+
+function normalizeCandidate(result: TavilyResult, brief: string): HunterProspect | null {
+  const sourceUrl = String(result.url ?? "").trim();
+  const title = String(result.title ?? "").trim();
+  if (!sourceUrl || !title) return null;
+
+  const companyName = title.replace(/\s*[-|:].*$/, "").trim();
+  if (!companyName) return null;
+
+  return {
+    companyName,
+    website: sourceUrl,
+    sourceUrl,
+    evidence: String(result.content ?? "").trim(),
+    requirement: brief,
+    fitReason: "Discovered from public web research matching the HUNTER brief.",
+  };
+}
+
+async function findDuplicates(ownerId: string, prospects: HunterProspect[]) {
+  const output = new Map<string, { id: number; companyName: string }>();
+
+  for (const prospect of prospects) {
+    const identities = [
+      prospect.email?.trim(),
+      prospect.phone?.trim(),
+      prospect.companyName?.trim(),
+    ].filter(Boolean) as string[];
+
+    if (!identities.length) continue;
+
+    const identityFilters = identities.map((value) => {
+      if (value === prospect.email?.trim()) return ilike(leadsTable.email, value);
+      if (value === prospect.phone?.trim()) return ilike(leadsTable.phone, value);
+      return ilike(leadsTable.companyName, value);
+    });
+
+    const [duplicate] = await db.select({
+      id: leadsTable.id,
+      companyName: leadsTable.companyName,
+    }).from(leadsTable).where(and(
+      eq(leadsTable.ownerId, ownerId),
+      or(...identityFilters)!,
+    )).limit(1);
+
+    if (duplicate) output.set(prospect.companyName.toLowerCase(), duplicate);
+  }
+
+  return output;
+}
+
 const hunterSearch: NovaTool = {
   name: "hunter_search_prospects",
   description: "Search the existing CRM for possible prospect matches before importing a researched prospect.",
@@ -39,31 +118,149 @@ const hunterSearch: NovaTool = {
   },
 };
 
+const hunterWebResearch: NovaTool = {
+  name: "hunter_web_research",
+  description: "Discover public-web prospect candidates using product, customer type, geography and free-text criteria. Never contacts prospects.",
+  risk: "read",
+  requiresApproval: false,
+  async execute(input) {
+    const p = (input ?? {}) as {
+      query?: string;
+      geography?: string;
+      customerType?: string;
+      product?: string;
+      maxResults?: number;
+    };
+
+    const query = [
+      p.query?.trim(),
+      p.product ? `"${p.product.trim()}"` : "",
+      p.customerType?.trim(),
+      p.geography?.trim(),
+      "supplier distributor installer integrator company",
+    ].filter(Boolean).join(" ");
+
+    if (!query) return { ok: false, tool: this.name, error: "query, product, customerType, or geography is required" };
+
+    try {
+      const raw = await tavilySearch(query, p.maxResults ?? 10);
+      const results = raw.map((item) => ({
+        ...normalizeCandidate(item, query),
+        score: typeof item.score === "number" ? item.score : null,
+      })).filter((item): item is HunterProspect & { score: number | null } => Boolean(item));
+
+      return {
+        ok: true,
+        tool: this.name,
+        data: {
+          query,
+          results,
+          nextStep: "Run hunter_run_campaign to normalize, duplicate-check and qualify candidates.",
+        },
+      };
+    } catch (error) {
+      return { ok: false, tool: this.name, error: error instanceof Error ? error.message : "Web research failed" };
+    }
+  },
+};
+
 const hunterQualify: NovaTool = {
   name: "hunter_qualify_prospect",
-  description: "Score a researched prospect against explicit business-fit criteria without contacting the prospect.",
+  description: "Qualify a researched prospect against explicit evidence and business-fit signals without contacting the prospect.",
   risk: "read",
   requiresApproval: false,
   async execute(input) {
     const p = (input ?? {}) as HunterProspect;
     if (!p.companyName?.trim()) return { ok: false, tool: this.name, error: "companyName is required" };
+
     const signals = [
       p.website ? "website identified" : "",
       p.location ? "location identified" : "",
       p.requirement ? "requirement identified" : "",
       p.sourceUrl ? "source evidence supplied" : "",
       p.evidence ? "research evidence supplied" : "",
+      p.fitReason ? "fit rationale supplied" : "",
     ].filter(Boolean);
+
     return {
       ok: true,
       tool: this.name,
       data: {
         companyName: p.companyName,
-        qualification: signals.length >= 4 ? "Research-ready" : signals.length >= 2 ? "Needs-more-research" : "Insufficient-evidence",
+        qualification: signals.length >= 5 ? "Research-ready" : signals.length >= 3 ? "Needs-more-research" : "Insufficient-evidence",
         signals,
         fitReason: p.fitReason ?? "",
       },
     };
+  },
+};
+
+const hunterRunCampaign: NovaTool = {
+  name: "hunter_run_campaign",
+  description: "Run a complete read-only HUNTER campaign: web discovery, candidate normalization, CRM duplicate detection and evidence qualification. No lead is created and no prospect is contacted.",
+  risk: "read",
+  requiresApproval: false,
+  async execute(input, context) {
+    const p = (input ?? {}) as {
+      brief?: string;
+      geography?: string;
+      customerType?: string;
+      product?: string;
+      maxResults?: number;
+    };
+
+    const brief = [p.brief?.trim(), p.product?.trim(), p.customerType?.trim(), p.geography?.trim()]
+      .filter(Boolean).join(" ");
+
+    if (!brief) return { ok: false, tool: this.name, error: "brief, product, customerType, or geography is required" };
+
+    try {
+      const query = [
+        brief,
+        "supplier distributor installer integrator company",
+      ].filter(Boolean).join(" ");
+
+      const raw = await tavilySearch(query, p.maxResults ?? 15);
+      const candidates = raw
+        .map((item) => normalizeCandidate(item, brief))
+        .filter((item): item is HunterProspect => Boolean(item));
+
+      const duplicates = await findDuplicates(context.ownerId, candidates);
+
+      const qualified = candidates.map((candidate) => {
+        const duplicate = duplicates.get(candidate.companyName.toLowerCase());
+        const signals = [
+          candidate.website,
+          candidate.location,
+          candidate.requirement,
+          candidate.sourceUrl,
+          candidate.evidence,
+          candidate.fitReason,
+        ].filter(Boolean).length;
+
+        return {
+          ...candidate,
+          qualification: signals >= 5 ? "Research-ready" : signals >= 3 ? "Needs-more-research" : "Insufficient-evidence",
+          duplicate: duplicate ? { id: duplicate.id, companyName: duplicate.companyName } : null,
+          importable: !duplicate && Boolean(candidate.website || candidate.email || candidate.phone),
+        };
+      });
+
+      return {
+        ok: true,
+        tool: this.name,
+        data: {
+          brief,
+          query,
+          discovered: qualified.length,
+          newCandidates: qualified.filter((candidate) => !candidate.duplicate).length,
+          candidates: qualified,
+          nextStep: "Select candidates and submit hunter_create_lead requests. Lead creation remains approval-gated.",
+        },
+      };
+    } catch (error) {
+      return { ok: false, tool: this.name, error: error instanceof Error ? error.message : "HUNTER campaign failed" };
+    }
   },
 };
 
@@ -116,4 +313,10 @@ const hunterCreateLead: NovaTool = {
   },
 };
 
-export const hunterNovaTools: NovaTool[] = [hunterSearch, hunterQualify, hunterCreateLead];
+export const hunterNovaTools: NovaTool[] = [
+  hunterSearch,
+  hunterWebResearch,
+  hunterRunCampaign,
+  hunterQualify,
+  hunterCreateLead,
+];
