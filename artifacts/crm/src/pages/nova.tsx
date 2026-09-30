@@ -79,6 +79,7 @@ export function NovaCommandCenter() {
     Promise.all([
       fetch("/api/nova/tools", { credentials: "include" }).then((r) => r.json()).then((data) => setTools(data.tools ?? [])),
       loadApprovals(),
+      loadInbox(),
     ]).finally(() => setLoading(false));
   }, []);
 
