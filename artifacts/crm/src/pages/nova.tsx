@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 type Tool = { name: string; description: string; risk: string; requiresApproval: boolean };
-type Approval = { id: number; toolName: string; risk: string; status: string; input: unknown; requestedAt: string };\ntype WhatsappMessage = { id: number; leadId: number | null; direction: string; status: string; phone: string; messageType: string; body: string; createdAt: string };
+type Approval = { id: number; toolName: string; risk: string; status: string; input: unknown; requestedAt: string };
+type WhatsappMessage = { id: number; leadId: number | null; direction: string; status: string; phone: string; messageType: string; body: string; createdAt: string };
 type Enrichment = { companyName: string; website?: string; location?: string; sources: Array<{ title: string; url: string; content: string; score: number | null }>; socialProfiles: string[]; contactEvidence: Array<{ title: string; url: string; content: string; score: number | null }>; servicesAndSignals: string[]; rollventoFit?: { category?: string | null; candidates?: Array<{ product?: { model?: string; productName?: string; category?: string }; score?: number; reason?: string }>; questions?: string[] } | null; };
 type Candidate = {
   companyName: string;
@@ -37,8 +38,23 @@ export function NovaCommandCenter() {
   const [command, setCommand] = useState("");
   const [result, setResult] = useState<unknown>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const [running, setRunning] = useState(false);\n  const [enrichment, setEnrichment] = useState<Record<string, Enrichment>>({});
-  const [loading, setLoading] = useState(true);\n  const [salesLeadId, setSalesLeadId] = useState("");\n  const [salesRequirement, setSalesRequirement] = useState("");\n  const [salesModel, setSalesModel] = useState("");\n  const [salesQty, setSalesQty] = useState("1");\n  const [salesPrice, setSalesPrice] = useState("");\n  const [salesDiscount, setSalesDiscount] = useState("0");\n  const [whatsappQuotationId, setWhatsappQuotationId] = useState("");\n  const [followupLeadId, setFollowupLeadId] = useState("");\n  const [followupDate, setFollowupDate] = useState("");\n  const [followupNote, setFollowupNote] = useState("");\n  const [inbox, setInbox] = useState<WhatsappMessage[]>([]);\n  const [inboxLoading, setInboxLoading] = useState(false);\n  const [selectedMessage, setSelectedMessage] = useState<WhatsappMessage | null>(null);\n
+  const [running, setRunning] = useState(false);
+  const [enrichment, setEnrichment] = useState<Record<string, Enrichment>>({});
+  const [loading, setLoading] = useState(true);
+  const [salesLeadId, setSalesLeadId] = useState("");
+  const [salesRequirement, setSalesRequirement] = useState("");
+  const [salesModel, setSalesModel] = useState("");
+  const [salesQty, setSalesQty] = useState("1");
+  const [salesPrice, setSalesPrice] = useState("");
+  const [salesDiscount, setSalesDiscount] = useState("0");
+  const [whatsappQuotationId, setWhatsappQuotationId] = useState("");
+  const [followupLeadId, setFollowupLeadId] = useState("");
+  const [followupDate, setFollowupDate] = useState("");
+  const [followupNote, setFollowupNote] = useState("");
+  const [inbox, setInbox] = useState<WhatsappMessage[]>([]);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<WhatsappMessage | null>(null);
+
 
   async function loadInbox() {
     setInboxLoading(true);
