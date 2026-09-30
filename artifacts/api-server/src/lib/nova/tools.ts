@@ -279,7 +279,50 @@ const scheduleSalesFollowup: NovaTool = {
     return ok(this.name, { leadId: updated.id, nextFollowUp: updated.nextFollowUp });
   },
 };
-\nconst calculateQuotationPreview: NovaTool = {
+\n
+const understandWhatsappReply: NovaTool = {
+  name: "understand_whatsapp_reply",
+  description: "Interpret an inbound WhatsApp reply for an owned lead using CRM and catalogue context. Returns a suggested next action but never sends or changes financial data.",
+  risk: "read",
+  requiresApproval: false,
+  async execute(input, context) {
+    const value = (input ?? {}) as { leadId?: number; message?: string };
+    const leadId = Number(value.leadId);
+    const message = value.message?.trim();
+    if (!Number.isInteger(leadId) || leadId <= 0) return fail(this.name, "valid leadId is required");
+    if (!message) return fail(this.name, "message is required");
+    const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, leadId), eq(leadsTable.ownerId, context.ownerId)));
+    if (!lead) return fail(this.name, "Lead not found");
+
+    const lower = message.toLowerCase();
+    const asksForPrice = /price|cost|rate|quotation|quote|offer|price list/.test(lower);
+    const accepts = /accept|approved|confirm|confirmed|proceed|go ahead|place order/.test(lower);
+    const asksTechnical = /technical|specification|spec|load|capacity|dimension|voltage|warranty|datasheet|manual/.test(lower);
+    const needsHuman = /call me|speak|sales person|human|manager|urgent|complaint|problem|issue/.test(lower);
+
+    const match = matchProductsToEnquiry({
+      productHint: message,
+      category: null,
+      mentionedModel: null,
+      requiredCapacityKg: null,
+      specifications: [],
+    });
+
+    const suggestedAction = needsHuman ? "human_followup" : accepts ? "sales_order_review" : asksForPrice ? "quotation_review" : asksTechnical ? "technical_review" : match.candidates.length ? "product_clarification" : "human_followup";
+
+    return ok(this.name, {
+      lead: { id: lead.id, companyName: lead.companyName, contactName: lead.contactName, requirement: lead.requirement, status: lead.status },
+      message,
+      intent: { asksForPrice, accepts, asksTechnical, needsHuman },
+      productMatch: match,
+      suggestedAction,
+      autoReplyAllowed: false,
+      note: "Inbound interpretation is advisory. External replies, quotation changes and order actions remain approval-gated.",
+    });
+  },
+};
+
+const calculateQuotationPreview: NovaTool = {
   name: "calculate_quotation_preview",
   description: "Calculate quotation totals without writing a financial document.",
   risk: "financial",
