@@ -1,6 +1,7 @@
 import { and, desc, eq } from "drizzle-orm";
 import { Router, type IRouter } from "express";
 import { db, novaApprovalsTable } from "@workspace/db";
+import { getNovaAgent, novaAgents } from "../lib/nova/agents";
 import { getNovaTool, listNovaTools } from "../lib/nova/tools";
 import type { NovaCommandRequest } from "../lib/nova/types";
 
@@ -44,6 +45,27 @@ router.get("/nova", (req, res): void => {
     capabilities: ["CRM", "product intelligence", "quotation preview", "sales documents", "approvals", "marketing", "lead generation"],
     tools: listNovaTools(),
   });
+});
+
+router.get("/nova/agents", (req, res): void => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  res.json({ agents: novaAgents });
+});
+
+router.get("/nova/agents/:id", (req, res): void => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  const agent = getNovaAgent(String(req.params.id).toUpperCase());
+  if (!agent) {
+    res.status(404).json({ error: "Agent not found" });
+    return;
+  }
+  res.json({ agent });
 });
 
 router.get("/nova/tools", (req, res): void => {
