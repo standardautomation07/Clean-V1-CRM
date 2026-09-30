@@ -5,6 +5,7 @@ import crmRouter from "./crm";
 import enquiriesRouter from "./enquiries";
 import productsRouter from "./products";
 import quotationsRouter from "./quotations";
+import documentsRouter from "./documents";
 import novaRouter from "./nova";
 import devAuthRouter, { isLocalDevAuthEnabled } from "./dev-auth";
 import passwordAuthRouter, { isPasswordAuthEnabled } from "./password-auth";
@@ -19,6 +20,7 @@ router.use(crmRouter);
 router.use(enquiriesRouter);
 router.use(productsRouter);
 router.use(quotationsRouter);
+router.use(documentsRouter);
 router.use(novaRouter);
 
 export default router;
