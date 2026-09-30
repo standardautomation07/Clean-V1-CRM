@@ -1,5 +1,5 @@
 import { and, desc, eq, ilike, or } from "drizzle-orm";
-import { db, leadsTable } from "@workspace/db";
+import { activitiesTable, db, leadsTable, quotationsTable, whatsappMessagesTable } from "@workspace/db";
 import {
   getProductByModel,
   matchProductsToEnquiry,
@@ -11,6 +11,8 @@ import { calculateQuotation, type QuotationItemInput } from "../quotations/calc"
 import { commercialNovaTools } from "./commercial";
 import { hunterNovaTools } from "./hunter";
 import type { NovaTool, NovaToolResult } from "./types";
+
+function money(value: string | number): number { return Number(value); }
 
 function ok<T>(tool: string, data: T): NovaToolResult<T> {
   return { ok: true, tool, data };
@@ -241,7 +243,7 @@ const sendWhatsappText: NovaTool = {
     if (!message) return fail(this.name, "message is required");
     const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, leadId), eq(leadsTable.ownerId, context.ownerId)));
     if (!lead) return fail(this.name, "Lead not found");
-    const phone = (value.phone?.trim() || lead.phone.trim()).replace(/[^\\d+]/g, "");
+    const phone = (value.phone?.trim() || lead.phone.trim()).replace(/[^\d+]/g, "");
     if (!phone) return fail(this.name, "Lead has no phone number");
     const token = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
     const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
@@ -253,12 +255,18 @@ const sendWhatsappText: NovaTool = {
       body: JSON.stringify({ messaging_product: "whatsapp", to: phone, type: "text", text: { preview_url: true, body: message } }),
     });
     const payload = await response.json().catch(() => ({}));
+    const messageId = String(payload?.messages?.[0]?.id ?? `failed-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    await db.insert(whatsappMessagesTable).values({
+      ownerId: context.ownerId, leadId, direction: "Outbound",
+      status: response.ok ? "Sent" : "Failed", waMessageId: messageId,
+      phone, messageType: "text", body: message, payload,
+    });
     if (!response.ok) return fail(this.name, `WhatsApp API error: ${payload?.error?.message ?? response.statusText}`);
     await db.insert(activitiesTable).values({
       leadId, createdBy: context.ownerId, type: "WhatsApp",
       description: `NOVA sent WhatsApp message to ${phone}.${value.quotationId ? ` Quotation ${value.quotationId} referenced.` : ""}`,
     });
-    return ok(this.name, { leadId, phone, messageId: payload?.messages?.[0]?.id ?? null, provider: "Meta WhatsApp Cloud API" });
+    return ok(this.name, { leadId, phone, messageId: payload?.messages?.[0]?.id ?? messageId, provider: "Meta WhatsApp Cloud API" });
   },
 };
 
@@ -322,6 +330,36 @@ const understandWhatsappReply: NovaTool = {
   },
 };
 
+const draftWhatsappReply: NovaTool = {
+  name: "draft_whatsapp_reply",
+  description: "Create a deterministic WhatsApp reply draft from an inbound message and NOVA interpretation. Read-only; never sends.",
+  risk: "read",
+  requiresApproval: false,
+  async execute(input, context) {
+    const value = (input ?? {}) as { leadId?: number; message?: string };
+    const interpretation = await understandWhatsappReply.execute({ leadId: value.leadId, message: value.message }, context);
+    if (!interpretation.ok) return interpretation;
+    const data = interpretation.data as {
+      lead: { id: number; contactName?: string; companyName?: string };
+      intent: { asksForPrice: boolean; accepts: boolean; asksTechnical: boolean; needsHuman: boolean };
+      productMatch: { candidates?: Array<{ product?: { model?: string } }>; questions?: string[] };
+      suggestedAction: string;
+    };
+    const customer = data.lead.contactName || data.lead.companyName || "there";
+    const questions = data.productMatch.questions ?? [];
+    const details = questions.join(" and ").replace(/\.$/, "");
+    let suggestedReply: string;
+    if (data.intent.needsHuman) suggestedReply = `Hi ${customer}, thank you for your message. A member of our sales team will contact you shortly to assist.`;
+    else if (data.intent.accepts) suggestedReply = `Hi ${customer}, thank you for confirming. Our team will review the details and contact you about the next steps.`;
+    else if (data.intent.asksForPrice) suggestedReply = questions.length ? `Hi ${customer}, thank you for your enquiry. To prepare an accurate quotation, could you please share ${details}?` : `Hi ${customer}, thank you for your enquiry. Our sales team will review your requirement and follow up with quotation details.`;
+    else if (data.intent.asksTechnical) {
+      const model = data.productMatch.candidates?.[0]?.product?.model;
+      suggestedReply = model ? `Hi ${customer}, thank you for your technical question about ${model}. Our team will verify the specifications and get back to you.` : `Hi ${customer}, thank you for your technical question. Could you please share the product model and the specification you need confirmed?`;
+    } else suggestedReply = questions.length ? `Hi ${customer}, thank you for your enquiry. Could you please share ${details} so we can assist you accurately?` : `Hi ${customer}, thank you for your message. Our team will review your requirement and get back to you shortly.`;
+    return ok(this.name, { leadId: data.lead.id, suggestedReply, suggestedNextAction: data.suggestedAction, interpretation: data, autoSend: false });
+  },
+};
+
 const calculateQuotationPreview: NovaTool = {
   name: "calculate_quotation_preview",
   description: "Calculate quotation totals without writing a financial document.",
@@ -343,6 +381,13 @@ export const novaTools: NovaTool[] = [
   listLeads,
   getLead,
   calculateQuotationPreview,
+  salesQualifyEnquiry,
+  salesPrepareQuotation,
+  prepareWhatsappQuotationMessage,
+  sendWhatsappText,
+  understandWhatsappReply,
+  draftWhatsappReply,
+  scheduleSalesFollowup,
   ...commercialNovaTools,
   ...hunterNovaTools,
 ];

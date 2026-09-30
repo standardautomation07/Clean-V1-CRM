@@ -54,6 +54,8 @@ export function NovaCommandCenter() {
   const [inbox, setInbox] = useState<WhatsappMessage[]>([]);
   const [inboxLoading, setInboxLoading] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<WhatsappMessage | null>(null);
+  const [replyDraft, setReplyDraft] = useState("");
+  const [replyAction, setReplyAction] = useState("");
 
 
   async function loadInbox() {
@@ -67,7 +69,23 @@ export function NovaCommandCenter() {
 
   async function interpretMessage(message: WhatsappMessage) {
     if (!message.leadId || !message.body) return;
-    await executeNova("understand_whatsapp_reply", { leadId: message.leadId, message: message.body });
+    setSelectedMessage(message);
+    setReplyDraft("");
+    setReplyAction("");
+    setRunning(true);
+    try {
+      const response = await fetch("/api/nova/execute", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tool: "draft_whatsapp_reply", input: { leadId: message.leadId, message: message.body } }),
+      });
+      const data = await response.json();
+      setResult(data);
+      if (data.ok && data.data) {
+        setReplyDraft(data.data.suggestedReply ?? "");
+        setReplyAction(data.data.suggestedNextAction ?? "");
+      }
+    } finally { setRunning(false); }
   }
 
   async function loadApprovals() {
@@ -367,6 +385,35 @@ export function NovaCommandCenter() {
         <div className="space-y-2"><label className="text-xs font-semibold">Quotation ID</label><Input value={whatsappQuotationId} onChange={(e) => setWhatsappQuotationId(e.target.value)} placeholder="Quotation ID" type="number" /><Button variant="outline" disabled={running || !whatsappQuotationId} onClick={() => executeNova("prepare_whatsapp_quotation_message",{quotationId:Number(whatsappQuotationId)})}><MessageCircle className="size-4" />Prepare WhatsApp message</Button></div>
         <div className="space-y-2"><label className="text-xs font-semibold">Follow-up</label><Input value={followupLeadId} onChange={(e) => setFollowupLeadId(e.target.value)} placeholder="Lead ID" type="number" /><div className="flex gap-2"><Input value={followupDate} onChange={(e) => setFollowupDate(e.target.value)} type="date" /><Input value={followupNote} onChange={(e) => setFollowupNote(e.target.value)} placeholder="Follow-up note" /></div><Button variant="outline" disabled={running || !followupLeadId || !followupDate} onClick={() => executeNova("schedule_sales_followup",{leadId:Number(followupLeadId),date:followupDate,note:followupNote})}><Clock3 className="size-4" />Request follow-up approval</Button></div>
       </div>
+    </section>
+
+    <section className="mt-6 rounded-2xl border border-border bg-card p-5 md:p-7">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div><div className="flex items-center gap-2"><MessageCircle className="size-5 text-primary" /><h2 className="font-display text-lg font-bold">WhatsApp Inbox</h2></div><p className="mt-1 text-xs text-muted-foreground">Review incoming messages, draft a deterministic reply, then request human approval before sending.</p></div>
+        <Button size="sm" variant="outline" disabled={inboxLoading} onClick={loadInbox}>{inboxLoading ? "Refreshing…" : "Refresh inbox"}</Button>
+      </div>
+      {inbox.length === 0 ? <p className="mt-4 rounded-xl bg-muted/40 p-4 text-xs text-muted-foreground">{inboxLoading ? "Loading messages…" : "No WhatsApp messages found."}</p> : <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="max-h-96 space-y-2 overflow-auto">
+          {inbox.map((message) => <button key={message.id} type="button" onClick={() => { setSelectedMessage(message); setReplyDraft(""); setReplyAction(""); }} className={`w-full rounded-xl border p-3 text-left ${selectedMessage?.id === message.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"}`}>
+            <div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold">{message.phone}</span><span className="text-[10px] text-muted-foreground">{message.direction} · {message.status}</span></div>
+            <p className="mt-2 line-clamp-3 text-xs">{message.body || `[${message.messageType} message]`}</p><p className="mt-2 text-[10px] text-muted-foreground">{new Date(message.createdAt).toLocaleString()}</p>
+          </button>)}
+        </div>
+        <div className="rounded-xl border border-border p-4">
+          {selectedMessage ? <>
+            <div className="text-xs font-semibold">Selected message</div>
+            <p className="mt-2 whitespace-pre-wrap rounded-lg bg-muted/40 p-3 text-xs">{selectedMessage.body || `[${selectedMessage.messageType} message]`}</p>
+            {selectedMessage.direction === "Inbound" && <Button className="mt-3" size="sm" variant="outline" disabled={running || !selectedMessage.leadId || !selectedMessage.body} onClick={() => interpretMessage(selectedMessage)}><Sparkles className="size-3" />Draft suggested reply</Button>}
+            {replyAction && <p className="mt-3 text-[11px] text-muted-foreground"><strong>Suggested next action:</strong> {replyAction}</p>}
+            {replyDraft && <>
+              <label className="mt-4 block text-xs font-semibold" htmlFor="nova-whatsapp-reply">Suggested reply (editable)</label>
+              <textarea id="nova-whatsapp-reply" value={replyDraft} onChange={(event) => setReplyDraft(event.target.value)} rows={5} className="mt-2 w-full resize-y rounded-lg border border-border bg-background p-3 text-xs" />
+              <Button className="mt-3" size="sm" disabled={running || !selectedMessage.leadId || !replyDraft.trim()} onClick={() => executeNova("send_whatsapp_text", { leadId: selectedMessage.leadId, phone: selectedMessage.phone, message: replyDraft })}><ShieldCheck className="size-3" />Request approval to send</Button>
+              <p className="mt-2 text-[10px] text-muted-foreground">Nothing is sent until an authorized user approves the request below.</p>
+            </>}
+          </> : <p className="text-xs text-muted-foreground">Select a message to review it and prepare a reply.</p>}
+        </div>
+      </div>}
     </section>
 
     {approvals.length > 0 && <section className="mt-6 rounded-2xl border border-amber-500/30 bg-card p-5 md:p-7">
