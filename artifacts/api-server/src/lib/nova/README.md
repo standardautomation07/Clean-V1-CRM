@@ -30,3 +30,13 @@ The next implementation phase adds persistent Sales Order, Delivery Challan, Inv
 - MARKETING: Instagram, Facebook, LinkedIn and YouTube content/publishing
 - SUPPORT: customer communication and service workflows
 - ANALYST: dashboards, pipeline and business reports
+
+
+## HUNTER workflow
+
+1. Research a prospect using an external research source or browser workflow.
+2. Preserve the company/contact/source evidence in the proposed prospect payload.
+3. Run `hunter_search_prospects` before creating anything in CRM.
+4. Run `hunter_qualify_prospect` to identify missing evidence.
+5. Use `hunter_create_lead` only after human approval. The tool performs a final duplicate check before writing the lead.
+6. HUNTER does not send external outreach; outreach remains a separate approval-gated capability.
