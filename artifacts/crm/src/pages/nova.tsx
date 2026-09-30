@@ -180,6 +180,32 @@ export function NovaCommandCenter() {
     }
   }
 
+  async function requestQuotationFromResult() {
+    if (!result || typeof result !== "object") return;
+    const data = (result as { data?: any }).data;
+    if (!data?.readyForQuotation || !data?.lead?.id || !data?.item) return;
+    setRunning(true);
+    try {
+      const response = await fetch("/api/nova/execute", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tool: "create_quotation",
+          input: {
+            leadId: data.lead.id,
+            items: [data.item],
+            taxRate: data.calculation?.totals?.taxRate ?? 18,
+          },
+        }),
+      });
+      setResult(await response.json());
+      await loadApprovals();
+    } finally {
+      setRunning(false);
+    }
+  }
+
   async function decide(id: number, action: "approve" | "reject") {
     const response = await fetch(`/api/nova/approvals/${id}/${action}`, {
       method: "POST",
@@ -252,7 +278,10 @@ export function NovaCommandCenter() {
       </div>
     </section>}
 
-    {result !== null && campaign.length === 0 && <pre className="mt-6 max-h-96 overflow-auto rounded-xl bg-muted/60 p-4 text-xs">{JSON.stringify(result, null, 2)}</pre>}
+    {result !== null && campaign.length === 0 && <section className="mt-6 rounded-xl border border-border bg-card p-5">
+      <pre className="max-h-72 overflow-auto rounded-xl bg-muted/60 p-4 text-xs">{JSON.stringify(result, null, 2)}</pre>
+      {typeof result === "object" && result !== null && (result as { data?: any }).data?.readyForQuotation && <div className="mt-4"><Button disabled={running} onClick={requestQuotationFromResult}><ShieldCheck className="size-4" />Request quotation approval</Button></div>}
+    </section>}
 
     <section className="mt-6 rounded-2xl border border-border bg-card p-5 md:p-7">
       <div className="flex items-start gap-3"><div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><FileText className="size-5" /></div><div><h2 className="font-display text-lg font-bold">SALES — quotation preparation</h2><p className="mt-1 text-xs text-muted-foreground">Use the deterministic Rollvento catalogue to identify the product. Pricing is always supplied by an authorized user; quotation creation remains approval-gated.</p></div></div>
