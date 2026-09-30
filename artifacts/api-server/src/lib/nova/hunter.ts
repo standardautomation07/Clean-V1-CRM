@@ -1,5 +1,6 @@
 import { and, desc, eq, ilike, or } from "drizzle-orm";
 import { db, leadsTable } from "@workspace/db";
+import { matchProductsToEnquiry } from "../knowledge/products";
 import type { NovaTool } from "./types";
 
 type HunterProspect = {
@@ -164,6 +165,69 @@ const hunterWebResearch: NovaTool = {
   },
 };
 
+const hunterEnrichProspect: NovaTool = {
+  name: "hunter_enrich_prospect",
+  description: "Deeply research one public prospect, extract company/contact/social/service evidence, and deterministically match the research to Rollvento products. Never contacts the prospect.",
+  risk: "read",
+  requiresApproval: false,
+  async execute(input) {
+    const p = (input ?? {}) as {
+      companyName?: string;
+      website?: string;
+      location?: string;
+      requirement?: string;
+      productHint?: string;
+    };
+    const companyName = p.companyName?.trim();
+    if (!companyName) return { ok: false, tool: this.name, error: "companyName is required" };
+
+    const query = [
+      `"${companyName}"`,
+      p.location?.trim(),
+      p.productHint?.trim(),
+      "company website products services contact distributor installer automation",
+    ].filter(Boolean).join(" ");
+
+    try {
+      const results = await tavilySearch(query, 8);
+      const sources = results.map((item) => ({
+        title: item.title ?? "",
+        url: item.url ?? "",
+        content: item.content ?? "",
+        score: typeof item.score === "number" ? item.score : null,
+      }));
+      const combinedEvidence = sources.map((item) => item.content).join(" ");
+      const productQuery = [p.requirement, p.productHint, combinedEvidence].filter(Boolean).join(" ");
+      const rollventoFit = productQuery ? matchProductsToEnquiry({
+        productHint: productQuery,
+        category: null,
+        mentionedModel: null,
+        requiredCapacityKg: null,
+        specifications: [],
+      }) : null;
+      const urls = sources.map((item) => item.url).filter(Boolean);
+      return {
+        ok: true,
+        tool: this.name,
+        data: {
+          companyName,
+          website: p.website ?? sources[0]?.url ?? "",
+          location: p.location ?? "",
+          researchQuery: query,
+          sources,
+          socialProfiles: urls.filter((url) => /linkedin\\.com|facebook\\.com|instagram\\.com|youtube\\.com/i.test(url)),
+          contactEvidence: sources.filter((item) => /email|phone|contact|whatsapp|@/i.test(item.content)),
+          servicesAndSignals: sources.map((item) => item.content).filter(Boolean).slice(0, 6),
+          rollventoFit,
+          nextStep: "Review enrichment, then submit hunter_create_lead for human approval.",
+        },
+      };
+    } catch (error) {
+      return { ok: false, tool: this.name, error: error instanceof Error ? error.message : "Prospect enrichment failed" };
+    }
+  },
+};
+
 const hunterQualify: NovaTool = {
   name: "hunter_qualify_prospect",
   description: "Qualify a researched prospect against explicit evidence and business-fit signals without contacting the prospect.",
@@ -316,6 +380,7 @@ const hunterCreateLead: NovaTool = {
 export const hunterNovaTools: NovaTool[] = [
   hunterSearch,
   hunterWebResearch,
+  hunterEnrichProspect,
   hunterRunCampaign,
   hunterQualify,
   hunterCreateLead,
