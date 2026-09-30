@@ -38,7 +38,7 @@ export function NovaCommandCenter() {
   const [result, setResult] = useState<unknown>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [running, setRunning] = useState(false);\n  const [enrichment, setEnrichment] = useState<Record<string, Enrichment>>({});
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);\n  const [salesLeadId, setSalesLeadId] = useState("");\n  const [salesRequirement, setSalesRequirement] = useState("");\n  const [salesModel, setSalesModel] = useState("");\n  const [salesQty, setSalesQty] = useState("1");\n  const [salesPrice, setSalesPrice] = useState("");\n  const [salesDiscount, setSalesDiscount] = useState("0");
 
   async function loadApprovals() {
     const response = await fetch("/api/nova/approvals?status=Pending", { credentials: "include" });
@@ -153,6 +153,33 @@ export function NovaCommandCenter() {
     }
   }
 
+  async function prepareSalesQuotation() {
+    setRunning(true);
+    try {
+      const response = await fetch("/api/nova/execute", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tool: "sales_prepare_quotation",
+          input: {
+            leadId: Number(salesLeadId),
+            requirement: salesRequirement,
+            productModel: salesModel || undefined,
+            quantity: Number(salesQty),
+            unitPrice: salesPrice === "" ? undefined : Number(salesPrice),
+            discount: Number(salesDiscount),
+            taxRate: 18,
+          },
+        }),
+      });
+      setResult(await response.json());
+      await loadApprovals();
+    } finally {
+      setRunning(false);
+    }
+  }
+
   async function decide(id: number, action: "approve" | "reject") {
     const response = await fetch(`/api/nova/approvals/${id}/${action}`, {
       method: "POST",
@@ -226,6 +253,19 @@ export function NovaCommandCenter() {
     </section>}
 
     {result !== null && campaign.length === 0 && <pre className="mt-6 max-h-96 overflow-auto rounded-xl bg-muted/60 p-4 text-xs">{JSON.stringify(result, null, 2)}</pre>}
+
+    <section className="mt-6 rounded-2xl border border-border bg-card p-5 md:p-7">
+      <div className="flex items-start gap-3"><div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><FileText className="size-5" /></div><div><h2 className="font-display text-lg font-bold">SALES — quotation preparation</h2><p className="mt-1 text-xs text-muted-foreground">Use the deterministic Rollvento catalogue to identify the product. Pricing is always supplied by an authorized user; quotation creation remains approval-gated.</p></div></div>
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
+        <Input value={salesLeadId} onChange={(e) => setSalesLeadId(e.target.value)} placeholder="Lead ID" />
+        <Input value={salesRequirement} onChange={(e) => setSalesRequirement(e.target.value)} placeholder="Customer requirement" />
+        <Input value={salesModel} onChange={(e) => setSalesModel(e.target.value)} placeholder="Exact model (optional)" />
+        <Input value={salesQty} onChange={(e) => setSalesQty(e.target.value)} placeholder="Qty" type="number" min="1" />
+        <Input value={salesPrice} onChange={(e) => setSalesPrice(e.target.value)} placeholder="Unit price (INR)" type="number" min="0" />
+        <Input value={salesDiscount} onChange={(e) => setSalesDiscount(e.target.value)} placeholder="Discount %" type="number" min="0" max="100" />
+      </div>
+      <div className="mt-4"><Button disabled={running || !salesLeadId || (!salesRequirement && !salesModel)} onClick={prepareSalesQuotation}><FileText className="size-4" />{running ? "Preparing…" : "Prepare quotation"}</Button></div>
+    </section>
 
     {approvals.length > 0 && <section className="mt-6 rounded-2xl border border-amber-500/30 bg-card p-5 md:p-7">
       <div className="mb-4 flex items-center gap-2"><ShieldCheck className="size-5 text-amber-600" /><h2 className="font-display text-lg font-bold">Pending approvals</h2><span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold">{approvals.length}</span></div>
