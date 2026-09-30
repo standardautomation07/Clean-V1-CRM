@@ -202,6 +202,83 @@ const salesPrepareQuotation: NovaTool = {
     });
   },
 };
+\n
+const prepareWhatsappQuotationMessage: NovaTool = {
+  name: "prepare_whatsapp_quotation_message",
+  description: "Prepare a customer-ready WhatsApp quotation message from an owned quotation. Does not send anything.",
+  risk: "read",
+  requiresApproval: false,
+  async execute(input, context) {
+    const quotationId = Number((input as { quotationId?: number } | undefined)?.quotationId);
+    if (!Number.isInteger(quotationId) || quotationId <= 0) return fail(this.name, "valid quotationId is required");
+    const [quotation] = await db.select().from(quotationsTable).where(and(eq(quotationsTable.id, quotationId), eq(quotationsTable.ownerId, context.ownerId)));
+    if (!quotation) return fail(this.name, "Quotation not found");
+    const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, quotation.leadId), eq(leadsTable.ownerId, context.ownerId)));
+    if (!lead) return fail(this.name, "Lead not found");
+    if (!lead.phone.trim()) return fail(this.name, "Lead has no phone number");
+    return ok(this.name, {
+      leadId: lead.id,
+      phone: lead.phone,
+      customerName: lead.contactName || lead.companyName,
+      quotationNumber: quotation.quotationNumber,
+      total: money(quotation.total),
+      message: `Dear ${lead.contactName || lead.companyName},\\n\\nPlease find quotation ${quotation.quotationNumber} from Rollvento Automation for your requirement.\\n\\nQuotation value: INR ${money(quotation.total).toLocaleString("en-IN", { minimumFractionDigits: 2 })}\\n\\nWe can share the quotation PDF and assist with any technical or commercial questions.\\n\\nRegards,\\nRollvento Automation`,
+      pdfPath: `/api/quotations/${quotation.id}/pdf`,
+    });
+  },
+};
+
+const sendWhatsappText: NovaTool = {
+  name: "send_whatsapp_text",
+  description: "Send an approved WhatsApp text message through Meta WhatsApp Cloud API. Requires human approval and WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID.",
+  risk: "external",
+  requiresApproval: true,
+  async execute(input, context) {
+    const value = (input ?? {}) as { leadId?: number; phone?: string; message?: string; quotationId?: number };
+    const leadId = Number(value.leadId);
+    const message = value.message?.trim();
+    if (!Number.isInteger(leadId) || leadId <= 0) return fail(this.name, "valid leadId is required");
+    if (!message) return fail(this.name, "message is required");
+    const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, leadId), eq(leadsTable.ownerId, context.ownerId)));
+    if (!lead) return fail(this.name, "Lead not found");
+    const phone = (value.phone?.trim() || lead.phone.trim()).replace(/[^\\d+]/g, "");
+    if (!phone) return fail(this.name, "Lead has no phone number");
+    const token = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
+    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
+    if (!token || !phoneNumberId) return fail(this.name, "WhatsApp Cloud API is not configured on the server");
+    const version = process.env.WHATSAPP_GRAPH_VERSION?.trim() || "v23.0";
+    const response = await fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", to: phone, type: "text", text: { preview_url: true, body: message } }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) return fail(this.name, `WhatsApp API error: ${payload?.error?.message ?? response.statusText}`);
+    await db.insert(activitiesTable).values({
+      leadId, createdBy: context.ownerId, type: "WhatsApp",
+      description: `NOVA sent WhatsApp message to ${phone}.${value.quotationId ? ` Quotation ${value.quotationId} referenced.` : ""}`,
+    });
+    return ok(this.name, { leadId, phone, messageId: payload?.messages?.[0]?.id ?? null, provider: "Meta WhatsApp Cloud API" });
+  },
+};
+
+const scheduleSalesFollowup: NovaTool = {
+  name: "schedule_sales_followup",
+  description: "Set the next follow-up date for an owned lead and record the follow-up activity. Requires human approval.",
+  risk: "write",
+  requiresApproval: true,
+  async execute(input, context) {
+    const value = (input ?? {}) as { leadId?: number; date?: string; note?: string };
+    const leadId = Number(value.leadId);
+    if (!Number.isInteger(leadId) || leadId <= 0) return fail(this.name, "valid leadId is required");
+    if (!value.date || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value.date)) return fail(this.name, "date must be YYYY-MM-DD");
+    const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, leadId), eq(leadsTable.ownerId, context.ownerId)));
+    if (!lead) return fail(this.name, "Lead not found");
+    const [updated] = await db.update(leadsTable).set({ nextFollowUp: value.date, updatedAt: new Date() }).where(and(eq(leadsTable.id, leadId), eq(leadsTable.ownerId, context.ownerId))).returning();
+    await db.insert(activitiesTable).values({ leadId, createdBy: context.ownerId, type: "FollowUp", description: `NOVA scheduled follow-up for ${value.date}.${value.note ? ` ${value.note}` : ""}` });
+    return ok(this.name, { leadId: updated.id, nextFollowUp: updated.nextFollowUp });
+  },
+};
 \nconst calculateQuotationPreview: NovaTool = {
   name: "calculate_quotation_preview",
   description: "Calculate quotation totals without writing a financial document.",
