@@ -38,7 +38,7 @@ export function NovaCommandCenter() {
   const [result, setResult] = useState<unknown>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [running, setRunning] = useState(false);\n  const [enrichment, setEnrichment] = useState<Record<string, Enrichment>>({});
-  const [loading, setLoading] = useState(true);\n  const [salesLeadId, setSalesLeadId] = useState("");\n  const [salesRequirement, setSalesRequirement] = useState("");\n  const [salesModel, setSalesModel] = useState("");\n  const [salesQty, setSalesQty] = useState("1");\n  const [salesPrice, setSalesPrice] = useState("");\n  const [salesDiscount, setSalesDiscount] = useState("0");
+  const [loading, setLoading] = useState(true);\n  const [salesLeadId, setSalesLeadId] = useState("");\n  const [salesRequirement, setSalesRequirement] = useState("");\n  const [salesModel, setSalesModel] = useState("");\n  const [salesQty, setSalesQty] = useState("1");\n  const [salesPrice, setSalesPrice] = useState("");\n  const [salesDiscount, setSalesDiscount] = useState("0");\n  const [whatsappQuotationId, setWhatsappQuotationId] = useState("");\n  const [followupLeadId, setFollowupLeadId] = useState("");\n  const [followupDate, setFollowupDate] = useState("");\n  const [followupNote, setFollowupNote] = useState("");\n
 
   async function loadApprovals() {
     const response = await fetch("/api/nova/approvals?status=Pending", { credentials: "include" });
@@ -151,6 +151,19 @@ export function NovaCommandCenter() {
     } finally {
       setRunning(false);
     }
+  }
+
+  async function executeNova(tool: string, input: unknown) {
+    setRunning(true);
+    try {
+      const response = await fetch("/api/nova/execute", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tool, input }),
+      });
+      setResult(await response.json());
+      await loadApprovals();
+    } finally { setRunning(false); }
   }
 
   async function prepareSalesQuotation() {
@@ -315,6 +328,14 @@ export function NovaCommandCenter() {
         <Input value={salesDiscount} onChange={(e) => setSalesDiscount(e.target.value)} placeholder="Discount %" type="number" min="0" max="100" />
       </div>
       <div className="mt-4"><Button disabled={running || !salesLeadId || (!salesRequirement && !salesModel)} onClick={prepareSalesQuotation}><FileText className="size-4" />{running ? "Preparing…" : "Prepare quotation"}</Button></div>
+    </section>
+
+    <section className="mt-6 rounded-2xl border border-border bg-card p-5 md:p-7">
+      <div className="flex items-start gap-3"><div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary"><MessageCircle className="size-5" /></div><div><h2 className="font-display text-lg font-bold">SALES — WhatsApp & follow-up</h2><p className="mt-1 text-xs text-muted-foreground">Prepare customer messages, request approval before sending, and schedule the next sales follow-up.</p></div></div>
+      <div className="mt-5 grid gap-3 md:grid-cols-2">
+        <div className="space-y-2"><label className="text-xs font-semibold">Quotation ID</label><Input value={whatsappQuotationId} onChange={(e) => setWhatsappQuotationId(e.target.value)} placeholder="Quotation ID" type="number" /><Button variant="outline" disabled={running || !whatsappQuotationId} onClick={() => executeNova("prepare_whatsapp_quotation_message",{quotationId:Number(whatsappQuotationId)})}><MessageCircle className="size-4" />Prepare WhatsApp message</Button></div>
+        <div className="space-y-2"><label className="text-xs font-semibold">Follow-up</label><Input value={followupLeadId} onChange={(e) => setFollowupLeadId(e.target.value)} placeholder="Lead ID" type="number" /><div className="flex gap-2"><Input value={followupDate} onChange={(e) => setFollowupDate(e.target.value)} type="date" /><Input value={followupNote} onChange={(e) => setFollowupNote(e.target.value)} placeholder="Follow-up note" /></div><Button variant="outline" disabled={running || !followupLeadId || !followupDate} onClick={() => executeNova("schedule_sales_followup",{leadId:Number(followupLeadId),date:followupDate,note:followupNote})}><Clock3 className="size-4" />Request follow-up approval</Button></div>
+      </div>
     </section>
 
     {approvals.length > 0 && <section className="mt-6 rounded-2xl border border-amber-500/30 bg-card p-5 md:p-7">
