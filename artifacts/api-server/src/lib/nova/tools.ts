@@ -9,6 +9,7 @@ import {
 } from "../knowledge/products";
 import { calculateQuotation, type QuotationItemInput } from "../quotations/calc";
 import { commercialNovaTools } from "./commercial";
+import { hunterNovaTools } from "./hunter";
 import type { NovaTool, NovaToolResult } from "./types";
 
 function ok<T>(tool: string, data: T): NovaToolResult<T> {
@@ -108,6 +109,7 @@ export const novaTools: NovaTool[] = [
   getLead,
   calculateQuotationPreview,
   ...commercialNovaTools,
+  ...hunterNovaTools,
 ];
 
 export function getNovaTool(name: string): NovaTool | undefined {
