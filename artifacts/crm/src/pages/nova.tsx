@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 type Tool = { name: string; description: string; risk: string; requiresApproval: boolean };
-type Approval = { id: number; toolName: string; risk: string; status: string; input: unknown; requestedAt: string };
+type Approval = { id: number; toolName: string; risk: string; status: string; input: unknown; requestedAt: string };\ntype WhatsappMessage = { id: number; leadId: number | null; direction: string; status: string; phone: string; messageType: string; body: string; createdAt: string };
 type Enrichment = { companyName: string; website?: string; location?: string; sources: Array<{ title: string; url: string; content: string; score: number | null }>; socialProfiles: string[]; contactEvidence: Array<{ title: string; url: string; content: string; score: number | null }>; servicesAndSignals: string[]; rollventoFit?: { category?: string | null; candidates?: Array<{ product?: { model?: string; productName?: string; category?: string }; score?: number; reason?: string }>; questions?: string[] } | null; };
 type Candidate = {
   companyName: string;
@@ -38,7 +38,21 @@ export function NovaCommandCenter() {
   const [result, setResult] = useState<unknown>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [running, setRunning] = useState(false);\n  const [enrichment, setEnrichment] = useState<Record<string, Enrichment>>({});
-  const [loading, setLoading] = useState(true);\n  const [salesLeadId, setSalesLeadId] = useState("");\n  const [salesRequirement, setSalesRequirement] = useState("");\n  const [salesModel, setSalesModel] = useState("");\n  const [salesQty, setSalesQty] = useState("1");\n  const [salesPrice, setSalesPrice] = useState("");\n  const [salesDiscount, setSalesDiscount] = useState("0");\n  const [whatsappQuotationId, setWhatsappQuotationId] = useState("");\n  const [followupLeadId, setFollowupLeadId] = useState("");\n  const [followupDate, setFollowupDate] = useState("");\n  const [followupNote, setFollowupNote] = useState("");\n
+  const [loading, setLoading] = useState(true);\n  const [salesLeadId, setSalesLeadId] = useState("");\n  const [salesRequirement, setSalesRequirement] = useState("");\n  const [salesModel, setSalesModel] = useState("");\n  const [salesQty, setSalesQty] = useState("1");\n  const [salesPrice, setSalesPrice] = useState("");\n  const [salesDiscount, setSalesDiscount] = useState("0");\n  const [whatsappQuotationId, setWhatsappQuotationId] = useState("");\n  const [followupLeadId, setFollowupLeadId] = useState("");\n  const [followupDate, setFollowupDate] = useState("");\n  const [followupNote, setFollowupNote] = useState("");\n  const [inbox, setInbox] = useState<WhatsappMessage[]>([]);\n  const [inboxLoading, setInboxLoading] = useState(false);\n  const [selectedMessage, setSelectedMessage] = useState<WhatsappMessage | null>(null);\n
+
+  async function loadInbox() {
+    setInboxLoading(true);
+    try {
+      const response = await fetch("/api/whatsapp/inbox", { credentials: "include" });
+      const data = await response.json();
+      setInbox(Array.isArray(data.messages) ? data.messages : []);
+    } finally { setInboxLoading(false); }
+  }
+
+  async function interpretMessage(message: WhatsappMessage) {
+    if (!message.leadId || !message.body) return;
+    await executeNova("understand_whatsapp_reply", { leadId: message.leadId, message: message.body });
+  }
 
   async function loadApprovals() {
     const response = await fetch("/api/nova/approvals?status=Pending", { credentials: "include" });
