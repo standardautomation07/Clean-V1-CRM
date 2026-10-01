@@ -1,5 +1,5 @@
-import { and, desc, eq } from "drizzle-orm";
-import { db, leadsTable, whatsappMessagesTable, activitiesTable } from "@workspace/db";
+import { and, desc, eq, isNull, or } from "drizzle-orm";
+import { db, leadsTable, usersTable, whatsappMessagesTable, activitiesTable } from "@workspace/db";
 import { getNovaTool } from "../lib/nova/tools";
 import { Router, type IRouter } from "express";
 import crypto from "node:crypto";
@@ -16,6 +16,21 @@ function verifySignature(rawBody: Buffer, signature: string | undefined, secret:
 
 function normalizePhone(value: string) {
   return value.replace(/[^\d]/g, "");
+}
+
+/**
+ * Owner for an inbound message whose number matches no lead. Without this the
+ * message is stored with a null owner and the inbox, which is scoped by owner,
+ * can never show it - so every message from a new customer is invisible.
+ */
+async function resolveInboxOwnerId(): Promise<string | null> {
+  const configured = process.env.WHATSAPP_LEAD_OWNER_ID?.trim() || process.env.SITE_USER_ID?.trim();
+  if (configured) {
+    const [user] = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.id, configured));
+    if (user) return user.id;
+  }
+  const users = await db.select({ id: usersTable.id }).from(usersTable).limit(2);
+  return users.length === 1 ? users[0].id : null;
 }
 
 async function findLeadByPhone(phone: string) {
@@ -61,9 +76,10 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
         if (existing.length) continue;
 
         const lead = await findLeadByPhone(phone);
+        const ownerId = lead?.ownerId ?? (await resolveInboxOwnerId());
         const body = message?.type === "text" ? String(message?.text?.body ?? "") : "";
         const [saved] = await db.insert(whatsappMessagesTable).values({
-          ownerId: lead?.ownerId ?? null,
+          ownerId,
           leadId: lead?.id ?? null,
           direction: "Inbound",
           status: "Received",
@@ -94,7 +110,14 @@ router.get("/whatsapp/inbox", async (req, res): Promise<void> => {
     res.status(401).json({ error: "Authentication required" });
     return;
   }
-  const rows = await db.select().from(whatsappMessagesTable).where(eq(whatsappMessagesTable.ownerId, req.user.id)).orderBy(desc(whatsappMessagesTable.createdAt)).limit(100);
+  // Unassigned messages are included: a number that matches no lead and no
+  // resolvable owner must still reach a human rather than vanish.
+  const rows = await db
+    .select()
+    .from(whatsappMessagesTable)
+    .where(or(eq(whatsappMessagesTable.ownerId, req.user.id), isNull(whatsappMessagesTable.ownerId)))
+    .orderBy(desc(whatsappMessagesTable.createdAt))
+    .limit(100);
   res.json({ messages: rows });
 });
 
