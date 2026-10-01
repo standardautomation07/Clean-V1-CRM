@@ -243,28 +243,78 @@ const statements = [
   `CREATE INDEX IF NOT EXISTS commercial_document_items_document_idx ON commercial_document_items (document_id)`,
 ];
 
+/** Every table the application expects to exist. */
+const REQUIRED_TABLES = [
+  "activities",
+  "commercial_document_items",
+  "commercial_documents",
+  "customers",
+  "leads",
+  "nova_approvals",
+  "quotation_items",
+  "quotations",
+  "sessions",
+  "users",
+  "whatsapp_messages",
+];
+
 try {
   const client = await pool.connect();
   try {
-    const who = await client.query("select current_database() as db");
-    console.log("ensure-schema: connected to database", who.rows[0].db);
-    for (const sql of statements) {
-      await client.query(sql);
+    const who = await client.query("select current_database() as db, current_user as role");
+    console.log(`ensure-schema: connected to database ${who.rows[0].db} as ${who.rows[0].role}`);
+
+    const present = async () => {
+      const rows = await client.query(
+        "select table_name from information_schema.tables where table_schema='public'",
+      );
+      return new Set(rows.rows.map((r) => r.table_name));
+    };
+
+    // The application should connect with a least-privilege role that cannot
+    // change the schema. When migrations have already been applied by the
+    // database owner there is nothing to do, so skip the DDL rather than
+    // failing on "permission denied for schema public".
+    const before = await present();
+    const missing = REQUIRED_TABLES.filter((t) => !before.has(t));
+    if (missing.length === 0) {
+      console.log(`ensure-schema: schema already present (${REQUIRED_TABLES.length} tables), nothing to apply`);
+    } else {
+      console.log(`ensure-schema: applying schema, missing: ${missing.join(",")}`);
+      try {
+        for (const sql of statements) {
+          await client.query(sql);
+        }
+      } catch (err) {
+        if (err && err.code === "42501") {
+          console.error(
+            `ensure-schema: FAILED ${err.message}. The connected role may not change the schema. Apply lib/db/migrations/*.sql as the database owner, then redeploy. Missing tables: ${missing.join(",")}`,
+          );
+          process.exitCode = 1;
+          throw null;
+        }
+        throw err;
+      }
+      const after = await present();
+      const stillMissing = REQUIRED_TABLES.filter((t) => !after.has(t));
+      if (stillMissing.length) {
+        console.error(`ensure-schema: FAILED tables still missing after apply: ${stillMissing.join(",")}`);
+        process.exitCode = 1;
+        throw null;
+      }
+      console.log(`ensure-schema: ok tables= ${[...after].sort().join(",")}`);
     }
-    const tables = await client.query(
-      "select table_name from information_schema.tables where table_schema='public' order by 1",
-    );
-    console.log(
-      "ensure-schema: ok tables=",
-      tables.rows.map((r) => r.table_name).join(","),
-    );
   } finally {
     client.release();
   }
 } catch (err) {
-  console.error("ensure-schema: FAILED", err && err.message ? err.message : err);
-  if (err && err.code) console.error("ensure-schema: code=", err.code);
-  process.exitCode = 1;
+  if (err === null) {
+    // Already reported with an actionable message above.
+  } else {
+    console.error("ensure-schema: FAILED", err && err.message ? err.message : err);
+    if (err && err.code) console.error("ensure-schema: code=", err.code);
+    process.exitCode = 1;
+  }
 } finally {
   await pool.end().catch(() => {});
 }
