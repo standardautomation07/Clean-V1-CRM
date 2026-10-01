@@ -60,6 +60,8 @@ export function NovaCommandCenter() {
   const [tools, setTools] = useState<Tool[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [command, setCommand] = useState("");
+  const [searchIntent, setSearchIntent] = useState<"channel" | "buyer" | "any">("channel");
+  const [includeDirectories, setIncludeDirectories] = useState(false);
   const [result, setResult] = useState<unknown>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [running, setRunning] = useState(false);
@@ -135,7 +137,7 @@ export function NovaCommandCenter() {
     const hunterIntent = /(find|discover|prospect|hunter|distributor|dealer|installer|integrator|supplier|reseller|companies)/i.test(commandText);
     if (hunterIntent) {
       tool = "hunter_run_campaign";
-      input = { brief: commandText, maxResults: 15 };
+      input = { brief: commandText, maxResults: 15, intent: searchIntent, includeDirectories };
     } else if (text.includes("quotation")) {
       tool = "calculate_quotation_preview";
       input = { items: [], taxRate: 18 };
@@ -331,6 +333,27 @@ export function NovaCommandCenter() {
 
     <section className="rounded-2xl border border-border bg-card p-5 md:p-7">
       <div className="flex items-start gap-4"><div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Bot className="size-5" /></div><div><h2 className="font-display text-xl font-bold tracking-[-0.04em]">Tell NOVA what you need</h2><p className="mt-1 text-xs text-muted-foreground">HUNTER discovers public prospects and checks them against your CRM. Nothing becomes a lead until you approve it.</p></div></div>
+      <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
+        <span className="font-semibold text-muted-foreground">Looking for</span>
+        {([
+          ["channel", "Resellers & installers"],
+          ["buyer", "End users (factories, warehouses)"],
+          ["any", "Anything"],
+        ] as Array<["channel" | "buyer" | "any", string]>).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setSearchIntent(value)}
+            className={`rounded-lg border px-3 py-1.5 transition-colors ${searchIntent === value
+              ? "border-primary bg-primary/10 font-semibold text-foreground"
+              : "border-border text-muted-foreground hover:bg-muted/40"}`}
+          >{label}</button>
+        ))}
+        <label className="ml-2 flex items-center gap-1.5 text-muted-foreground">
+          <input type="checkbox" checked={includeDirectories} onChange={(e) => setIncludeDirectories(e.target.checked)} />
+          Include directory listings
+        </label>
+      </div>
       <div className="mt-6 flex gap-2"><Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder='Try: "Find rolling shutter motor distributors in UAE"' onKeyDown={(e) => { if (e.key === "Enter" && command.trim()) preview(command.trim()); }} /><Button disabled={running} onClick={() => command.trim() && preview(command.trim())}><Sparkles className="size-4" />{running ? "Researching…" : "Run"}</Button></div>
     </section>
 
