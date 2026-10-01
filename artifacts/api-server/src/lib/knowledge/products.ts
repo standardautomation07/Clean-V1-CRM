@@ -221,7 +221,10 @@ function detectCategory(text: string): ProductCategory | null {
 
 function extractCapacityKg(request: MatchRequest): number | null {
   if (request.requiredCapacityKg !== null && request.requiredCapacityKg > 0) return request.requiredCapacityKg;
-  const haystack = request.specifications.map((s) => `${s.name} ${s.value}`).join(" ");
+  // The weight is as often stated in the enquiry text as in a structured
+  // specification: "rolling shutter motor for 600 kg" must not be reported as
+  // a missing detail back to the customer who just supplied it.
+  const haystack = [...request.specifications.map((s) => `${s.name} ${s.value}`), request.productHint ?? ""].join(" ");
   const match = haystack.match(/(\d+(?:[.,]\d+)?)\s*(?:kg|kgs|kilograms?)\b/i);
   if (match) return Number(match[1].replace(",", ""));
   const tonne = haystack.match(/(\d+(?:\.\d+)?)\s*(?:ton|tonne|tons|tonnes|t)\b/i);

@@ -368,7 +368,7 @@ const draftWhatsappReply: NovaTool = {
     const data = interpretation.data as {
       lead: { id: number; contactName?: string; companyName?: string };
       intent: { asksForPrice: boolean; accepts: boolean; asksTechnical: boolean; needsHuman: boolean };
-      productMatch: { candidates?: Array<{ product?: { model?: string } }>; questions?: string[] };
+      productMatch: { candidates?: Array<{ product?: { model?: string; productName?: string } }>; questions?: string[] };
       suggestedAction: string;
     };
     const customer = data.lead.contactName || data.lead.companyName || "there";
@@ -383,7 +383,17 @@ const draftWhatsappReply: NovaTool = {
     else if (data.intent.asksTechnical) {
       const model = data.productMatch.candidates?.[0]?.product?.model;
       suggestedReply = model ? `Hi ${customer}, thank you for your technical question about ${model}. Our team will verify the specifications and get back to you.` : `Hi ${customer}, thank you for your technical question. Could you please share the product model and the specification you need confirmed?`;
-    } else suggestedReply = questions.length ? `Hi ${customer}, thank you for your enquiry. Could you please confirm the following so we can assist you accurately?\n${details}` : `Hi ${customer}, thank you for your message. Our team will review your requirement and get back to you shortly.`;
+    } else if (questions.length) {
+      suggestedReply = `Hi ${customer}, thank you for your enquiry. Could you please confirm the following so we can assist you accurately?\n${details}`;
+    } else {
+      // Nothing left to ask and the catalogue matched: name the model rather
+      // than fall back to a generic holding reply. Catalogue names only, never
+      // a price - pricing always comes from an authorised user.
+      const best = data.productMatch.candidates?.[0]?.product;
+      suggestedReply = best?.model
+        ? `Hi ${customer}, thank you for your enquiry. Based on what you have described, the ${best.model}${best.productName ? ` (${best.productName})` : ""} looks like the right fit. Our sales team will confirm the details and share a quotation shortly.`
+        : `Hi ${customer}, thank you for your message. Our team will review your requirement and get back to you shortly.`;
+    }
     return ok(this.name, { leadId: data.lead.id, suggestedReply, suggestedNextAction: data.suggestedAction, interpretation: data, autoSend: false });
   },
 };
