@@ -86,6 +86,23 @@ describe("matchProductsToEnquiry()", () => {
     assert.match(result.noMatchReason ?? "", /No sliding gate motors/i);
   });
 
+  it("reads the weight out of the enquiry text, not just structured specifications", () => {
+    const result = matchProductsToEnquiry({ productHint: "I need rolling shutter motors for 600 kg", category: null, mentionedModel: null, requiredCapacityKg: null, specifications: [] });
+    assert.equal(result.category, "Rolling Shutter Motors");
+    assert.ok(result.candidates.length > 0);
+    assert.ok(result.candidates.every((c) => (c.product.capacityKg ?? Infinity) >= 600), "every candidate must carry 600 kg");
+    assert.ok(!result.questions.some((q) => /weight/i.test(q)), `must not ask for a weight the customer gave: ${result.questions.join(" | ")}`);
+  });
+
+  it("understands tonnes in the enquiry text", () => {
+    const result = matchProductsToEnquiry({ productHint: "rolling shutter motor for a 1.5 tonne shutter", category: null, mentionedModel: null, requiredCapacityKg: null, specifications: [] });
+    assert.ok(result.candidates.every((c) => (c.product.capacityKg ?? Infinity) >= 1500));
+  });
+
+  it("an explicit capacity still wins over the text", () => {
+    const result = matchProductsToEnquiry({ productHint: "shutter motor for 600 kg", category: "Rolling Shutter Motors", mentionedModel: null, requiredCapacityKg: 1200, specifications: [] });
+    assert.ok(result.candidates.every((c) => (c.product.capacityKg ?? Infinity) >= 1200));
+  });
   it("search only returns catalogue products", () => {
     const hits = searchRollventoProducts({ query: "rolling shutter single phase", limit: 5 });
     assert.ok(hits.length > 0);
