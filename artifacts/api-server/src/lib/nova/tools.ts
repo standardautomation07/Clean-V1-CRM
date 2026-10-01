@@ -373,15 +373,17 @@ const draftWhatsappReply: NovaTool = {
     };
     const customer = data.lead.contactName || data.lead.companyName || "there";
     const questions = data.productMatch.questions ?? [];
-    const details = questions.join(" and ").replace(/\.$/, "");
+    // The catalogue returns whole sentences, so they are listed rather than
+    // spliced into one, which reads badly for the customer.
+    const details = questions.map((question) => `• ${question.trim()}`).join("\n");
     let suggestedReply: string;
     if (data.intent.needsHuman) suggestedReply = `Hi ${customer}, thank you for your message. A member of our sales team will contact you shortly to assist.`;
     else if (data.intent.accepts) suggestedReply = `Hi ${customer}, thank you for confirming. Our team will review the details and contact you about the next steps.`;
-    else if (data.intent.asksForPrice) suggestedReply = questions.length ? `Hi ${customer}, thank you for your enquiry. To prepare an accurate quotation, could you please share ${details}?` : `Hi ${customer}, thank you for your enquiry. Our sales team will review your requirement and follow up with quotation details.`;
+    else if (data.intent.asksForPrice) suggestedReply = questions.length ? `Hi ${customer}, thank you for your enquiry. To prepare an accurate quotation we need a little more detail:\n${details}` : `Hi ${customer}, thank you for your enquiry. Our sales team will review your requirement and follow up with quotation details.`;
     else if (data.intent.asksTechnical) {
       const model = data.productMatch.candidates?.[0]?.product?.model;
       suggestedReply = model ? `Hi ${customer}, thank you for your technical question about ${model}. Our team will verify the specifications and get back to you.` : `Hi ${customer}, thank you for your technical question. Could you please share the product model and the specification you need confirmed?`;
-    } else suggestedReply = questions.length ? `Hi ${customer}, thank you for your enquiry. Could you please share ${details} so we can assist you accurately?` : `Hi ${customer}, thank you for your message. Our team will review your requirement and get back to you shortly.`;
+    } else suggestedReply = questions.length ? `Hi ${customer}, thank you for your enquiry. Could you please confirm the following so we can assist you accurately?\n${details}` : `Hi ${customer}, thank you for your message. Our team will review your requirement and get back to you shortly.`;
     return ok(this.name, { leadId: data.lead.id, suggestedReply, suggestedNextAction: data.suggestedAction, interpretation: data, autoSend: false });
   },
 };

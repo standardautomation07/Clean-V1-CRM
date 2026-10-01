@@ -55,7 +55,7 @@ console.log(`ensure-schema: target ${parsedUrl.hostname}:${parsedUrl.port || 543
 const connectionString = stripSslQuery(raw.trim());
 const pool = new pg.Pool({
   connectionString,
-  ssl: { rejectUnauthorized: false },
+  ssl: parsedUrl.searchParams.get("sslmode") === "disable" ? false : { rejectUnauthorized: false },
   max: 1,
   connectionTimeoutMillis: 30_000,
 });

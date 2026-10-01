@@ -24,13 +24,24 @@ function stripSslQuery(url: string) {
   }
 }
 
+// Supabase pooler certificates fail verify-full on Vercel, so verification is
+// relaxed by default. "?sslmode=disable" in the URL turns TLS off entirely,
+// which only a local development database should ever ask for.
+function sslOption(url: string): false | { rejectUnauthorized: boolean } {
+  try {
+    if (new URL(url).searchParams.get("sslmode") === "disable") return false;
+  } catch {
+    // Fall through: an unparseable URL fails later with a clearer error.
+  }
+  return { rejectUnauthorized: false };
+}
+
 export const pool = new Pool({
   connectionString: stripSslQuery(process.env.DATABASE_URL.trim()),
   // node-postgres only issues prepared statements for named queries, which
   // drizzle does not use, so the Supabase transaction pooler (PgBouncer) is
   // already safe; pg has no "prepare" option of its own.
-  // Supabase pooler cert chain fails verify-full on Vercel/node-pg
-  ssl: { rejectUnauthorized: false },
+  ssl: sslOption(process.env.DATABASE_URL.trim()),
 });
 export const db = drizzle(pool, { schema });
 
