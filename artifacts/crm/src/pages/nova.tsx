@@ -23,8 +23,32 @@ type Candidate = {
   qualification?: string;
   duplicate?: { id: number; companyName: string } | null;
   importable?: boolean;
-  score?: number | null;
 };
+
+type ProductMatch = {
+  product?: {
+    id?: string;
+    model?: string;
+    productName?: string;
+    category?: string;
+    family?: string;
+    shortDescription?: string;
+    power?: string | null;
+    torque?: string | null;
+    voltage?: string | null;
+    capacityKg?: number | null;
+    keySpecifications?: Array<{ label?: string; value?: string | number; unit?: string | null }>;
+    features?: string[];
+  };
+  score?: number | null;
+  reason?: string;
+};
+
+function isProductSearchResult(value: unknown): value is { ok: true; tool: "search_products"; data: ProductMatch[] } {
+  if (!value || typeof value !== "object") return false;
+  const result = value as { ok?: boolean; tool?: string; data?: unknown };
+  return result.ok === true && result.tool === "search_products" && Array.isArray(result.data);
+}
 
 function isCampaignResult(value: unknown): value is { ok: true; data: { candidates?: Candidate[]; discovered?: number; newCandidates?: number; query?: string } } {
   if (!value || typeof value !== "object") return false;
@@ -298,6 +322,7 @@ export function NovaCommandCenter() {
   }
 
   const campaign = isCampaignResult(result) ? result.data.candidates ?? [] : [];
+  const productMatches = isProductSearchResult(result) ? result.data : null;
   const selectedCount = campaign.filter((candidate) => selected[candidate.companyName] && candidate.importable && !candidate.duplicate).length;
 
   return <AppShell>
@@ -360,7 +385,45 @@ export function NovaCommandCenter() {
     </section>}
 
     {result !== null && campaign.length === 0 && <section className="mt-6 rounded-xl border border-border bg-card p-5">
-      <pre className="max-h-72 overflow-auto rounded-xl bg-muted/60 p-4 text-xs">{JSON.stringify(result, null, 2)}</pre>
+      {productMatches ? <div>
+        <div className="mb-4">
+          <h2 className="font-display text-lg font-bold">Matched catalogue products</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{productMatches.length} {productMatches.length === 1 ? "product" : "products"} matched your search.</p>
+        </div>
+        {productMatches.length === 0 ? <p className="rounded-xl bg-muted/40 p-4 text-xs text-muted-foreground">No matching products were found. Try including the motor type, capacity, or application.</p> : <div className="grid gap-4 lg:grid-cols-2">
+          {productMatches.map((match, index) => {
+            const product = match.product;
+            if (!product) return null;
+            const specifications = product.keySpecifications?.slice(0, 4) ?? [];
+            return <article key={product.id ?? product.model ?? index} className="rounded-xl border border-border p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h3 className="font-display font-bold">{product.productName ?? product.model ?? "Catalogue product"}</h3>
+                  {product.model && product.productName && <p className="mt-1 text-xs font-semibold text-primary">{product.model}</p>}
+                </div>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {product.category && <span className="rounded-full bg-muted px-2 py-1 text-[10px]">{product.category}</span>}
+                {product.family && <span className="rounded-full bg-muted px-2 py-1 text-[10px]">{product.family}</span>}
+              </div>
+              {product.shortDescription && <p className="mt-3 text-xs leading-relaxed text-muted-foreground">{product.shortDescription}</p>}
+              {specifications.length > 0 && <dl className="mt-4 grid grid-cols-2 gap-2">
+                {specifications.map((spec, specIndex) => <div key={spec.label ?? specIndex} className="rounded-lg bg-muted/40 p-2">
+                  <dt className="text-[10px] text-muted-foreground">{spec.label ?? "Specification"}</dt>
+                  <dd className="mt-0.5 text-xs font-semibold">{spec.value}{spec.unit ? ` ${spec.unit}` : ""}</dd>
+                </div>)}
+              </dl>}
+              {match.reason && <p className="mt-3 text-[11px] text-muted-foreground">{match.reason}</p>}
+              {product.features && product.features.length > 0 && <div className="mt-3">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Key features</div>
+                <ul className="mt-1 list-inside list-disc space-y-1 text-[11px] text-muted-foreground">
+                  {product.features.slice(0, 3).map((feature, featureIndex) => <li key={featureIndex}>{feature}</li>)}
+                </ul>
+              </div>}
+            </article>;
+          })}
+        </div>}
+      </div> : <pre className="max-h-72 overflow-auto rounded-xl bg-muted/60 p-4 text-xs">{JSON.stringify(result, null, 2)}</pre>}
       {typeof result === "object" && result !== null && (result as { data?: any }).data?.readyForQuotation && <div className="mt-4"><Button disabled={running} onClick={requestQuotationFromResult}><ShieldCheck className="size-4" />Request quotation approval</Button></div>}
       {typeof result === "object" && result !== null && (result as { data?: any }).data?.status === "Draft" && (result as { data?: any }).data?.quotationNumber && <div className="mt-4"><Button disabled={running} onClick={requestGenerateQuotation}><ShieldCheck className="size-4" />Request PDF generation approval</Button></div>}
       {typeof result === "object" && result !== null && (result as { data?: any }).data?.pdfPath && <div className="mt-4"><a href={(result as { data: any }).data.pdfPath} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold text-primary hover:bg-muted"><ExternalLink className="size-4" />Open quotation PDF</a></div>}
