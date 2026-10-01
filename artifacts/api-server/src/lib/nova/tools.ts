@@ -372,28 +372,11 @@ const draftWhatsappReply: NovaTool = {
       suggestedAction: string;
     };
     const customer = data.lead.contactName || data.lead.companyName || "there";
-    const questions = data.productMatch.questions ?? [];
-    // The catalogue returns whole sentences, so they are listed rather than
-    // spliced into one, which reads badly for the customer.
-    const details = questions.map((question) => `• ${question.trim()}`).join("\n");
-    let suggestedReply: string;
-    if (data.intent.needsHuman) suggestedReply = `Hi ${customer}, thank you for your message. A member of our sales team will contact you shortly to assist.`;
-    else if (data.intent.accepts) suggestedReply = `Hi ${customer}, thank you for confirming. Our team will review the details and contact you about the next steps.`;
-    else if (data.intent.asksForPrice) suggestedReply = questions.length ? `Hi ${customer}, thank you for your enquiry. To prepare an accurate quotation we need a little more detail:\n${details}` : `Hi ${customer}, thank you for your enquiry. Our sales team will review your requirement and follow up with quotation details.`;
-    else if (data.intent.asksTechnical) {
-      const model = data.productMatch.candidates?.[0]?.product?.model;
-      suggestedReply = model ? `Hi ${customer}, thank you for your technical question about ${model}. Our team will verify the specifications and get back to you.` : `Hi ${customer}, thank you for your technical question. Could you please share the product model and the specification you need confirmed?`;
-    } else if (questions.length) {
-      suggestedReply = `Hi ${customer}, thank you for your enquiry. Could you please confirm the following so we can assist you accurately?\n${details}`;
-    } else {
-      // Nothing left to ask and the catalogue matched: name the model rather
-      // than fall back to a generic holding reply. Catalogue names only, never
-      // a price - pricing always comes from an authorised user.
-      const best = data.productMatch.candidates?.[0]?.product;
-      suggestedReply = best?.model
-        ? `Hi ${customer}, thank you for your enquiry. Based on what you have described, the ${best.model}${best.productName ? ` (${best.productName})` : ""} looks like the right fit. Our sales team will confirm the details and share a quotation shortly.`
-        : `Hi ${customer}, thank you for your message. Our team will review your requirement and get back to you shortly.`;
-    }
+    // One acknowledgement for every enquiry. Qualifying happens with a human,
+    // so the customer-facing text stays short, branded and identical whatever
+    // the message said; the interpretation below still tells the employee what
+    // was matched and what to do next. Editable before sending.
+    const suggestedReply = `Hi ${customer}, thank you for contacting Rollvento. Our team will reach out to you shortly.`;
     return ok(this.name, { leadId: data.lead.id, suggestedReply, suggestedNextAction: data.suggestedAction, interpretation: data, autoSend: false });
   },
 };
