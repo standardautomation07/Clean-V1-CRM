@@ -64,6 +64,57 @@ function normalizeCandidate(result: TavilyResult, brief: string): HunterProspect
   };
 }
 
+/**
+ * Who the campaign is looking for. The qualifiers steer the search engine:
+ * "channel" finds businesses that resell or fit the product, "buyer" finds
+ * the end users who operate the premises. Searching for both at once returns
+ * mostly the supply side, because those pages are far more numerous.
+ */
+export type HunterIntent = "buyer" | "channel" | "any";
+
+const INTENT_QUALIFIERS: Record<HunterIntent, string> = {
+  channel: "supplier OR distributor OR dealer OR installer OR fabricator OR integrator",
+  buyer: "factory OR warehouse OR plant OR mill OR godown OR showroom OR premises",
+  any: "",
+};
+
+/**
+ * Directories and marketplaces: these pages are listings of many businesses,
+ * never a prospect in themselves, and they crowd out real company sites.
+ */
+const DIRECTORY_HOSTS = [
+  "indiamart.com", "tradeindia.com", "justdial.com", "exportersindia.com",
+  "alibaba.com", "made-in-china.com", "sulekha.com", "yellowpages.in",
+  "indiacatalog.com", "tradewheel.com", "go4worldbusiness.com", "ec21.com",
+  "facebook.com", "linkedin.com", "youtube.com", "instagram.com", "x.com",
+  "twitter.com", "pinterest.com", "wikipedia.org", "amazon.in", "flipkart.com",
+  "indiabizclub.com", "connect2india.com", "tofler.in", "zaubacorp.com",
+];
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+export function isDirectoryUrl(url: string): boolean {
+  const host = hostOf(url);
+  if (!host) return false;
+  return DIRECTORY_HOSTS.some((d) => host === d || host.endsWith("." + d));
+}
+
+function readIntent(value: unknown): HunterIntent {
+  const v = String(value ?? "").trim().toLowerCase();
+  return v === "buyer" || v === "channel" || v === "any" ? v : "channel";
+}
+
+function buildQuery(parts: Array<string | undefined>, intent: HunterIntent): string {
+  const qualifiers = INTENT_QUALIFIERS[intent];
+  return [...parts, qualifiers].map((x) => x?.trim()).filter(Boolean).join(" ");
+}
+
 async function findDuplicates(ownerId: string, prospects: HunterProspect[]) {
   const output = new Map<string, { id: number; companyName: string }>();
 
@@ -131,32 +182,40 @@ const hunterWebResearch: NovaTool = {
       geography?: string;
       customerType?: string;
       product?: string;
+      intent?: string;
+      includeDirectories?: boolean;
       maxResults?: number;
     };
 
-    const query = [
+    const intent = readIntent(p.intent);
+    const query = buildQuery([
       p.query?.trim(),
       p.product ? `"${p.product.trim()}"` : "",
       p.customerType?.trim(),
       p.geography?.trim(),
-      "supplier distributor installer integrator company",
-    ].filter(Boolean).join(" ");
+    ], intent);
 
     if (!query) return { ok: false, tool: this.name, error: "query, product, customerType, or geography is required" };
 
     try {
       const raw = await tavilySearch(query, p.maxResults ?? 10);
-      const results = raw.map((item) => ({
+      const mapped = raw.map((item) => ({
         ...normalizeCandidate(item, query),
         score: typeof item.score === "number" ? item.score : null,
       })).filter((item): item is HunterProspect & { score: number | null } => Boolean(item));
+      const beforeFilter = mapped.length;
+      const results = p.includeDirectories
+        ? mapped
+        : mapped.filter((item) => !isDirectoryUrl(item.sourceUrl ?? item.website ?? ""));
 
       return {
         ok: true,
         tool: this.name,
         data: {
           query,
+          intent,
           results,
+          directoriesFiltered: beforeFilter - results.length,
           nextStep: "Run hunter_run_campaign to normalize, duplicate-check and qualify candidates.",
         },
       };
@@ -271,6 +330,8 @@ const hunterRunCampaign: NovaTool = {
       geography?: string;
       customerType?: string;
       product?: string;
+      intent?: string;
+      includeDirectories?: boolean;
       maxResults?: number;
     };
 
@@ -280,15 +341,17 @@ const hunterRunCampaign: NovaTool = {
     if (!brief) return { ok: false, tool: this.name, error: "brief, product, customerType, or geography is required" };
 
     try {
-      const query = [
-        brief,
-        "supplier distributor installer integrator company",
-      ].filter(Boolean).join(" ");
+      const intent = readIntent(p.intent);
+      const query = buildQuery([brief], intent);
 
       const raw = await tavilySearch(query, p.maxResults ?? 15);
-      const candidates = raw
+      const mapped = raw
         .map((item) => normalizeCandidate(item, brief))
         .filter((item): item is HunterProspect => Boolean(item));
+      const beforeFilter = mapped.length;
+      const candidates = p.includeDirectories
+        ? mapped
+        : mapped.filter((item) => !isDirectoryUrl(item.sourceUrl ?? item.website ?? ""));
 
       const duplicates = await findDuplicates(context.ownerId, candidates);
 
@@ -317,6 +380,8 @@ const hunterRunCampaign: NovaTool = {
         data: {
           brief,
           query,
+          intent,
+          directoriesFiltered: beforeFilter - candidates.length,
           discovered: qualified.length,
           newCandidates: qualified.filter((candidate) => !candidate.duplicate).length,
           candidates: qualified,
