@@ -23,7 +23,6 @@ type Candidate = {
   qualification?: string;
   duplicate?: { id: number; companyName: string } | null;
   importable?: boolean;
-  score?: number | null;
 };
 
 type ProductMatch = {
@@ -402,7 +401,6 @@ export function NovaCommandCenter() {
                   <h3 className="font-display font-bold">{product.productName ?? product.model ?? "Catalogue product"}</h3>
                   {product.model && product.productName && <p className="mt-1 text-xs font-semibold text-primary">{product.model}</p>}
                 </div>
-                {typeof match.score === "number" && <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-semibold text-primary">{Math.round(match.score * 100)}% match</span>}
               </div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {product.category && <span className="rounded-full bg-muted px-2 py-1 text-[10px]">{product.category}</span>}
