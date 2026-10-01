@@ -9,6 +9,9 @@ else
 fi
 pnpm --filter @workspace/api-server run build
 PORT=3000 BASE_PATH=/ pnpm --filter @workspace/crm run build
-OUTPUT_DIR="$ROOT/artifacts/crm/public"
+# vercel.json lives at the repository root and declares the api/index.mjs
+# function there, so the Vercel project must be rooted at the repository root
+# too; the static output therefore belongs in <repo>/public.
+OUTPUT_DIR="$ROOT/public"
 rm -rf "$OUTPUT_DIR"
 cp -r "$ROOT/artifacts/crm/dist/public" "$OUTPUT_DIR"
