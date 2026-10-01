@@ -33,6 +33,13 @@ async function resolveInboxOwnerId(): Promise<string | null> {
   return users.length === 1 ? users[0].id : null;
 }
 
+/** Display name WhatsApp sends with the message, when the sender shares it. */
+function profileName(value: unknown, phone: string): string {
+  const contacts = (value as { contacts?: Array<{ profile?: { name?: string } }> } | undefined)?.contacts;
+  const name = Array.isArray(contacts) ? contacts[0]?.profile?.name?.trim() : "";
+  return name || `WhatsApp +${phone}`;
+}
+
 async function findLeadByPhone(phone: string) {
   const normalized = normalizePhone(phone);
   const rows = await db.select().from(leadsTable);
@@ -75,9 +82,38 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
         const existing = await db.select({ id: whatsappMessagesTable.id }).from(whatsappMessagesTable).where(eq(whatsappMessagesTable.waMessageId, waMessageId)).limit(1);
         if (existing.length) continue;
 
-        const lead = await findLeadByPhone(phone);
-        const ownerId = lead?.ownerId ?? (await resolveInboxOwnerId());
+        const existingLead = await findLeadByPhone(phone);
+        const ownerId = existingLead?.ownerId ?? (await resolveInboxOwnerId());
         const body = message?.type === "text" ? String(message?.text?.body ?? "") : "";
+
+        // First contact from an unknown number becomes a lead, so the message
+        // has somewhere to live and NOVA can interpret it: every NOVA WhatsApp
+        // tool is scoped to a lead, so a message without one is a dead end.
+        // Requires an owner, because leads.owner_id is NOT NULL.
+        let lead = existingLead;
+        let leadCreated = false;
+        if (!lead && ownerId) {
+          const name = profileName(value, phone);
+          const [created] = await db.insert(leadsTable).values({
+            companyName: name,
+            contactName: name,
+            phone,
+            email: "",
+            source: "WhatsApp",
+            requirement: body.slice(0, 2000),
+            status: "New",
+            notes: `Created automatically from an inbound WhatsApp message from +${phone}.`,
+            ownerId,
+          }).returning();
+          lead = created;
+          leadCreated = true;
+          await db.insert(activitiesTable).values({
+            leadId: created.id,
+            createdBy: ownerId,
+            type: "LeadCreated",
+            description: `Lead created from an inbound WhatsApp message from +${phone}.`,
+          });
+        }
         const [saved] = await db.insert(whatsappMessagesTable).values({
           ownerId,
           leadId: lead?.id ?? null,
@@ -98,7 +134,8 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
             description: body ? `Inbound WhatsApp: ${body.slice(0, 500)}` : `Inbound WhatsApp message received (${message?.type ?? "unknown"}).`,
           });
         }
-        accepted++;
+        accepted += 1;
+        if (leadCreated) req.log.info({ leadId: lead?.id }, "WhatsApp inbound created a lead");
       }
     }
   }
