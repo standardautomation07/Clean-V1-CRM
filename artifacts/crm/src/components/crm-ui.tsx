@@ -3,6 +3,7 @@ import { Link, useLocation } from 'wouter';
 import {
   ArrowUpRight,
   Bell,
+  Bot,
   CalendarDays,
   ChevronRight,
   CircleHelp,
@@ -37,6 +38,7 @@ import { useToast } from '@/hooks/use-toast';
 const navItems = [
   { href: '/', label: 'Overview', icon: Gauge },
   { href: '/leads', label: 'Leads', icon: LayoutList },
+  { href: '/nova', label: 'NOVA', icon: Bot },
   { href: '/enquiry', label: 'New Enquiry', icon: Sparkles },
   { href: '/nova', label: 'NOVA', icon: Sparkles },
   { href: '/follow-ups', label: 'Follow-ups', icon: CalendarDays },
