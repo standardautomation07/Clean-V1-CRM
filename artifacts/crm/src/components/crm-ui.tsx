@@ -38,6 +38,7 @@ const navItems = [
   { href: '/', label: 'Overview', icon: Gauge },
   { href: '/leads', label: 'Leads', icon: LayoutList },
   { href: '/enquiry', label: 'New Enquiry', icon: Sparkles },
+  { href: '/nova', label: 'NOVA', icon: Sparkles },
   { href: '/follow-ups', label: 'Follow-ups', icon: CalendarDays },
   { href: '/customers', label: 'Customers', icon: Users },
 ];
