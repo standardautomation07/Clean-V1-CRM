@@ -26,5 +26,4 @@ export interface NovaTool<TInput = unknown, TOutput = unknown> extends NovaToolD
 export interface NovaCommandRequest {
   tool: string;
   input?: unknown;
-  approved?: boolean;
 }

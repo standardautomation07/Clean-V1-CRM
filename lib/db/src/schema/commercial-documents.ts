@@ -43,7 +43,9 @@ export const commercialDocumentItemsTable = pgTable("commercial_document_items",
   sortOrder: integer("sort_order").notNull().default(0),
 }, (table) => [index("commercial_document_items_document_idx").on(table.documentId)]);
 
-export const insertCommercialDocumentSchema = createInsertSchema(commercialDocumentsTable).omit({ id: true, createdAt: true, updatedAt: true });
+// "id" is generated-always, so drizzle-zod already leaves it out of the insert
+// schema; omitting it again throws "Unrecognized key" when this module loads.
+export const insertCommercialDocumentSchema = createInsertSchema(commercialDocumentsTable).omit({ createdAt: true, updatedAt: true });
 export type InsertCommercialDocument = z.infer<typeof insertCommercialDocumentSchema>;
 export type CommercialDocument = typeof commercialDocumentsTable.$inferSelect;
 export type CommercialDocumentItem = typeof commercialDocumentItemsTable.$inferSelect;

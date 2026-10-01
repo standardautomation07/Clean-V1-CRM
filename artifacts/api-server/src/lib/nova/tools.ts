@@ -204,7 +204,8 @@ const salesPrepareQuotation: NovaTool = {
     });
   },
 };
-\n
+
+
 const prepareWhatsappQuotationMessage: NovaTool = {
   name: "prepare_whatsapp_quotation_message",
   description: "Prepare a customer-ready WhatsApp quotation message from an owned quotation. Does not send anything.",
@@ -224,11 +225,28 @@ const prepareWhatsappQuotationMessage: NovaTool = {
       customerName: lead.contactName || lead.companyName,
       quotationNumber: quotation.quotationNumber,
       total: money(quotation.total),
-      message: `Dear ${lead.contactName || lead.companyName},\\n\\nPlease find quotation ${quotation.quotationNumber} from Rollvento Automation for your requirement.\\n\\nQuotation value: INR ${money(quotation.total).toLocaleString("en-IN", { minimumFractionDigits: 2 })}\\n\\nWe can share the quotation PDF and assist with any technical or commercial questions.\\n\\nRegards,\\nRollvento Automation`,
+      message: [
+        `Dear ${lead.contactName || lead.companyName},`,
+        "",
+        `Please find quotation ${quotation.quotationNumber} from Rollvento Automation for your requirement.`,
+        "",
+        `Quotation value: INR ${money(quotation.total).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+        "",
+        "We can share the quotation PDF and assist with any technical or commercial questions.",
+        "",
+        "Regards,",
+        "Rollvento Automation",
+      ].join("\n"),
       pdfPath: `/api/quotations/${quotation.id}/pdf`,
     });
   },
 };
+
+/** Minimal shape of the Meta Graph API message response we rely on. */
+interface GraphMessageResponse {
+  messages?: Array<{ id?: string }>;
+  error?: { message?: string };
+}
 
 const sendWhatsappText: NovaTool = {
   name: "send_whatsapp_text",
@@ -254,14 +272,21 @@ const sendWhatsappText: NovaTool = {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ messaging_product: "whatsapp", to: phone, type: "text", text: { preview_url: true, body: message } }),
     });
-    const payload = await response.json().catch(() => ({}));
+    const payload = (await response.json().catch(() => ({}))) as GraphMessageResponse;
     const messageId = String(payload?.messages?.[0]?.id ?? `failed-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     await db.insert(whatsappMessagesTable).values({
       ownerId: context.ownerId, leadId, direction: "Outbound",
       status: response.ok ? "Sent" : "Failed", waMessageId: messageId,
       phone, messageType: "text", body: message, payload,
     });
-    if (!response.ok) return fail(this.name, `WhatsApp API error: ${payload?.error?.message ?? response.statusText}`);
+    if (!response.ok) {
+      const reason = String(payload?.error?.message ?? response.statusText);
+      await db.insert(activitiesTable).values({
+        leadId, createdBy: context.ownerId, type: "WhatsApp",
+        description: `NOVA WhatsApp message to ${phone} failed: ${reason.slice(0, 400)}`,
+      });
+      return fail(this.name, `WhatsApp API error: ${reason}`);
+    }
     await db.insert(activitiesTable).values({
       leadId, createdBy: context.ownerId, type: "WhatsApp",
       description: `NOVA sent WhatsApp message to ${phone}.${value.quotationId ? ` Quotation ${value.quotationId} referenced.` : ""}`,
@@ -279,7 +304,7 @@ const scheduleSalesFollowup: NovaTool = {
     const value = (input ?? {}) as { leadId?: number; date?: string; note?: string };
     const leadId = Number(value.leadId);
     if (!Number.isInteger(leadId) || leadId <= 0) return fail(this.name, "valid leadId is required");
-    if (!value.date || !/^\\d{4}-\\d{2}-\\d{2}$/.test(value.date)) return fail(this.name, "date must be YYYY-MM-DD");
+    if (!value.date || !/^\d{4}-\d{2}-\d{2}$/.test(value.date)) return fail(this.name, "date must be YYYY-MM-DD");
     const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, leadId), eq(leadsTable.ownerId, context.ownerId)));
     if (!lead) return fail(this.name, "Lead not found");
     const [updated] = await db.update(leadsTable).set({ nextFollowUp: value.date, updatedAt: new Date() }).where(and(eq(leadsTable.id, leadId), eq(leadsTable.ownerId, context.ownerId))).returning();
@@ -287,7 +312,8 @@ const scheduleSalesFollowup: NovaTool = {
     return ok(this.name, { leadId: updated.id, nextFollowUp: updated.nextFollowUp });
   },
 };
-\n
+
+
 const understandWhatsappReply: NovaTool = {
   name: "understand_whatsapp_reply",
   description: "Interpret an inbound WhatsApp reply for an owned lead using CRM and catalogue context. Returns a suggested next action but never sends or changes financial data.",
@@ -347,15 +373,17 @@ const draftWhatsappReply: NovaTool = {
     };
     const customer = data.lead.contactName || data.lead.companyName || "there";
     const questions = data.productMatch.questions ?? [];
-    const details = questions.join(" and ").replace(/\.$/, "");
+    // The catalogue returns whole sentences, so they are listed rather than
+    // spliced into one, which reads badly for the customer.
+    const details = questions.map((question) => `• ${question.trim()}`).join("\n");
     let suggestedReply: string;
     if (data.intent.needsHuman) suggestedReply = `Hi ${customer}, thank you for your message. A member of our sales team will contact you shortly to assist.`;
     else if (data.intent.accepts) suggestedReply = `Hi ${customer}, thank you for confirming. Our team will review the details and contact you about the next steps.`;
-    else if (data.intent.asksForPrice) suggestedReply = questions.length ? `Hi ${customer}, thank you for your enquiry. To prepare an accurate quotation, could you please share ${details}?` : `Hi ${customer}, thank you for your enquiry. Our sales team will review your requirement and follow up with quotation details.`;
+    else if (data.intent.asksForPrice) suggestedReply = questions.length ? `Hi ${customer}, thank you for your enquiry. To prepare an accurate quotation we need a little more detail:\n${details}` : `Hi ${customer}, thank you for your enquiry. Our sales team will review your requirement and follow up with quotation details.`;
     else if (data.intent.asksTechnical) {
       const model = data.productMatch.candidates?.[0]?.product?.model;
       suggestedReply = model ? `Hi ${customer}, thank you for your technical question about ${model}. Our team will verify the specifications and get back to you.` : `Hi ${customer}, thank you for your technical question. Could you please share the product model and the specification you need confirmed?`;
-    } else suggestedReply = questions.length ? `Hi ${customer}, thank you for your enquiry. Could you please share ${details} so we can assist you accurately?` : `Hi ${customer}, thank you for your message. Our team will review your requirement and get back to you shortly.`;
+    } else suggestedReply = questions.length ? `Hi ${customer}, thank you for your enquiry. Could you please confirm the following so we can assist you accurately?\n${details}` : `Hi ${customer}, thank you for your message. Our team will review your requirement and get back to you shortly.`;
     return ok(this.name, { leadId: data.lead.id, suggestedReply, suggestedNextAction: data.suggestedAction, interpretation: data, autoSend: false });
   },
 };
