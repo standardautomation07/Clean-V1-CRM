@@ -106,7 +106,9 @@ router.post("/nova/execute", async (req, res): Promise<void> => {
     return;
   }
 
-  if (tool.requiresApproval && !body.approved) {
+  // Approval-gated tools are never executed from this endpoint, whatever the
+  // caller sends: they only run from POST /nova/approvals/:id/approve.
+  if (tool.requiresApproval) {
     const [approval] = await db.insert(novaApprovalsTable).values({
       ownerId,
       toolName: tool.name,

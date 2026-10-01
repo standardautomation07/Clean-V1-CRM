@@ -25,9 +25,10 @@ function stripSslQuery(url: string) {
 }
 
 export const pool = new Pool({
-  connectionString: stripSslQuery(process.env.DATABASE_URL),
-  // Required for Supabase transaction pooler (and similar PgBouncer setups)
-  prepare: false,
+  connectionString: stripSslQuery(process.env.DATABASE_URL.trim()),
+  // node-postgres only issues prepared statements for named queries, which
+  // drizzle does not use, so the Supabase transaction pooler (PgBouncer) is
+  // already safe; pg has no "prepare" option of its own.
   // Supabase pooler cert chain fails verify-full on Vercel/node-pg
   ssl: { rejectUnauthorized: false },
 });

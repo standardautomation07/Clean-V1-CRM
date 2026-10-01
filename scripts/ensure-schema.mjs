@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Apply CRM Postgres schema during Vercel build.
- * Uses node-pg with prepare:false + ssl.rejectUnauthorized=false (Supabase).
+ * Uses node-pg with ssl.rejectUnauthorized=false (Supabase pooler cert chain).
  * Never prints DATABASE_URL.
  */
 import { createRequire } from "node:module";
@@ -34,10 +34,27 @@ if (!raw) {
   process.exit(1);
 }
 
-const connectionString = stripSslQuery(raw);
+// Fail fast with an actionable message: node-pg parses the connection string
+// with WHATWG URL, so an unencoded reserved character in the password (most
+// often "@") surfaces as ERR_INVALID_URL. The value itself is never printed.
+let parsedUrl;
+try {
+  parsedUrl = new URL(raw.trim());
+} catch {
+  console.error(
+    "ensure-schema: DATABASE_URL is not a valid connection URI. Percent-encode reserved characters inside the password (@ -> %40, : -> %3A, / -> %2F, ? -> %3F, # -> %23) and keep the single @ that separates credentials from the host.",
+  );
+  process.exit(1);
+}
+if (!/^postgres(ql)?:$/.test(parsedUrl.protocol)) {
+  console.error(`ensure-schema: DATABASE_URL must use the postgresql:// scheme (got ${parsedUrl.protocol.replace(":", "")}://).`);
+  process.exit(1);
+}
+console.log(`ensure-schema: target ${parsedUrl.hostname}:${parsedUrl.port || 5432}${parsedUrl.pathname}`);
+
+const connectionString = stripSslQuery(raw.trim());
 const pool = new pg.Pool({
   connectionString,
-  prepare: false,
   ssl: { rejectUnauthorized: false },
   max: 1,
   connectionTimeoutMillis: 30_000,
