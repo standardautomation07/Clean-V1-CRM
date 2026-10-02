@@ -83,12 +83,21 @@ const INTENT_QUALIFIERS: Record<HunterIntent, string> = {
  * never a prospect in themselves, and they crowd out real company sites.
  */
 const DIRECTORY_HOSTS = [
+  // B2B marketplaces and trade directories
   "indiamart.com", "tradeindia.com", "justdial.com", "exportersindia.com",
   "alibaba.com", "made-in-china.com", "sulekha.com", "yellowpages.in",
   "indiacatalog.com", "tradewheel.com", "go4worldbusiness.com", "ec21.com",
+  "indiabizclub.com", "connect2india.com", "dial4trade.com",
+  "indianyellowpages.com", "yellowpages.co.in", "tradeford.com",
+  "exportersindia.co", "fibre2fashion.com", "pepagora.com",
+  // Property portals: a page about a warehouse is not a company that owns one
+  "magicbricks.com", "99acres.com", "housing.com", "propertywala.com",
+  "propertyinsurat.in", "suratvrproperties.com", "olx.in", "quikr.com",
+  "squareyards.com", "nobroker.in", "commonfloor.com",
+  // Social, reference, retail and company registries
   "facebook.com", "linkedin.com", "youtube.com", "instagram.com", "x.com",
   "twitter.com", "pinterest.com", "wikipedia.org", "amazon.in", "flipkart.com",
-  "indiabizclub.com", "connect2india.com", "tofler.in", "zaubacorp.com",
+  "tofler.in", "zaubacorp.com",
 ];
 
 function hostOf(url: string): string {

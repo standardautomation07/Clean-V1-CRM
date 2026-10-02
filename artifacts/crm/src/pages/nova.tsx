@@ -337,7 +337,7 @@ export function NovaCommandCenter() {
         <span className="font-semibold text-muted-foreground">Looking for</span>
         {([
           ["channel", "Resellers & installers"],
-          ["buyer", "End users (factories, warehouses)"],
+          ["buyer", "End users (weak — see note)"],
           ["any", "Anything"],
         ] as Array<["channel" | "buyer" | "any", string]>).map(([value, label]) => (
           <button
@@ -354,6 +354,13 @@ export function NovaCommandCenter() {
           Include directory listings
         </label>
       </div>
+      {searchIntent === "buyer" && (
+        <p className="mt-2 rounded-lg bg-amber-500/10 p-2.5 text-[11px] leading-relaxed text-amber-900 dark:text-amber-200">
+          End users rarely publish the shutters or gates they own, so this mostly returns property
+          listings rather than companies. Resellers &amp; installers is the reliable option; for end
+          users use enquiry forms, click-to-WhatsApp ads or trade lists instead.
+        </p>
+      )}
       <div className="mt-6 flex gap-2"><Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder='Try: "Find rolling shutter motor distributors in UAE"' onKeyDown={(e) => { if (e.key === "Enter" && command.trim()) preview(command.trim()); }} /><Button disabled={running} onClick={() => command.trim() && preview(command.trim())}><Sparkles className="size-4" />{running ? "Researching…" : "Run"}</Button></div>
     </section>
 
