@@ -21,6 +21,9 @@ type Candidate = {
   evidence?: string;
   fitReason?: string;
   qualification?: string;
+  category?: string;
+  rating?: number | null;
+  reviewsCount?: number | null;
   duplicate?: { id: number; companyName: string } | null;
   importable?: boolean;
 };
@@ -62,6 +65,8 @@ export function NovaCommandCenter() {
   const [command, setCommand] = useState("");
   const [searchIntent, setSearchIntent] = useState<"channel" | "buyer" | "any">("channel");
   const [includeDirectories, setIncludeDirectories] = useState(false);
+  const [source, setSource] = useState<"maps" | "web">("maps");
+  const [mapsLocation, setMapsLocation] = useState("");
   const [result, setResult] = useState<unknown>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [running, setRunning] = useState(false);
@@ -136,8 +141,13 @@ export function NovaCommandCenter() {
 
     const hunterIntent = /(find|discover|prospect|hunter|distributor|dealer|installer|integrator|supplier|reseller|companies)/i.test(commandText);
     if (hunterIntent) {
-      tool = "hunter_run_campaign";
-      input = { brief: commandText, maxResults: 15, intent: searchIntent, includeDirectories };
+      if (source === "maps") {
+        tool = "hunter_maps_campaign";
+        input = { query: commandText, location: mapsLocation.trim() || undefined, maxPlaces: 120, includeDirectories };
+      } else {
+        tool = "hunter_run_campaign";
+        input = { brief: commandText, maxResults: 15, intent: searchIntent, includeDirectories };
+      }
     } else if (text.includes("quotation")) {
       tool = "calculate_quotation_preview";
       input = { items: [], taxRate: 18 };
@@ -334,6 +344,31 @@ export function NovaCommandCenter() {
     <section className="rounded-2xl border border-border bg-card p-5 md:p-7">
       <div className="flex items-start gap-4"><div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Bot className="size-5" /></div><div><h2 className="font-display text-xl font-bold tracking-[-0.04em]">Tell NOVA what you need</h2><p className="mt-1 text-xs text-muted-foreground">HUNTER discovers public prospects and checks them against your CRM. Nothing becomes a lead until you approve it.</p></div></div>
       <div className="mt-5 flex flex-wrap items-center gap-2 text-xs">
+        <span className="font-semibold text-muted-foreground">Source</span>
+        {([
+          ["maps", "Google Maps — bulk, with phone"],
+          ["web", "Web search"],
+        ] as Array<["maps" | "web", string]>).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setSource(value)}
+            className={`rounded-lg border px-3 py-1.5 transition-colors ${source === value
+              ? "border-primary bg-primary/10 font-semibold text-foreground"
+              : "border-border text-muted-foreground hover:bg-muted/40"}`}
+          >{label}</button>
+        ))}
+        {source === "maps" && (
+          <input
+            value={mapsLocation}
+            onChange={(e) => setMapsLocation(e.target.value)}
+            placeholder="City or area, e.g. Rajkot"
+            className="rounded-lg border border-border bg-background px-3 py-1.5 text-xs"
+          />
+        )}
+      </div>
+      {source === "web" && (
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
         <span className="font-semibold text-muted-foreground">Looking for</span>
         {([
           ["channel", "Resellers & installers"],
@@ -354,7 +389,8 @@ export function NovaCommandCenter() {
           Include directory listings
         </label>
       </div>
-      {searchIntent === "buyer" && (
+      )}
+      {source === "web" && searchIntent === "buyer" && (
         <p className="mt-2 rounded-lg bg-amber-500/10 p-2.5 text-[11px] leading-relaxed text-amber-900 dark:text-amber-200">
           End users rarely publish the shutters or gates they own, so this mostly returns property
           listings rather than companies. Resellers &amp; installers is the reliable option; for end
@@ -382,6 +418,14 @@ export function NovaCommandCenter() {
                   <span className={`rounded-full px-2 py-1 text-[10px] font-semibold ${duplicate ? "bg-muted text-muted-foreground" : candidate.qualification === "Research-ready" ? "bg-emerald-500/10 text-emerald-700" : "bg-amber-500/10 text-amber-700"}`}>{duplicate ? "Already in CRM" : candidate.qualification ?? "Unqualified"}</span>
                 </div>
                 {candidate.website && <a href={candidate.website} target="_blank" rel="noreferrer" className="mt-3 inline-flex max-w-full items-center gap-1 truncate text-xs font-semibold text-primary hover:underline">{candidate.website}<ExternalLink className="size-3 shrink-0" /></a>}
+                {(candidate.phone || candidate.email || candidate.category || typeof candidate.rating === "number") && (
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+                    {candidate.phone && <a href={`tel:${candidate.phone}`} className="font-semibold text-foreground hover:underline">{candidate.phone}</a>}
+                    {candidate.email && <a href={`mailto:${candidate.email}`} className="font-semibold text-primary hover:underline">{candidate.email}</a>}
+                    {candidate.category && <span className="text-muted-foreground">{candidate.category}</span>}
+                    {typeof candidate.rating === "number" && <span className="text-muted-foreground">{candidate.rating.toFixed(1)}★{candidate.reviewsCount ? ` (${candidate.reviewsCount})` : ""}</span>}
+                  </div>
+                )}
                 {candidate.evidence && <p className="mt-3 line-clamp-4 text-xs leading-relaxed text-muted-foreground">{candidate.evidence}</p>}
                 <div className="mt-4 flex flex-wrap items-center gap-2">
                   <Button size="sm" variant="outline" disabled={running} onClick={() => enrichCandidate(candidate)}><Sparkles className="size-3" />{enrichment[candidate.companyName] ? "Enriched" : "Enrich"}</Button>
