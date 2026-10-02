@@ -68,6 +68,7 @@ export function NovaCommandCenter() {
   const [source, setSource] = useState<"maps" | "web">("maps");
   const [mapsLocation, setMapsLocation] = useState("");
   const [mapsWaiting, setMapsWaiting] = useState(0);
+  const [queueing, setQueueing] = useState<{ done: number; total: number; failed: string[] } | null>(null);
   const [result, setResult] = useState<unknown>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [running, setRunning] = useState(false);
@@ -224,7 +225,9 @@ export function NovaCommandCenter() {
     }
   }
 
-  async function requestLead(candidate: Candidate) {
+  /** Queue one lead for approval. Returns the response without touching state,
+   *  so a bulk submit can reload the queue once instead of once per lead. */
+  async function submitLead(candidate: Candidate) {
     const response = await fetch("/api/nova/execute", {
       method: "POST",
       credentials: "include",
@@ -246,8 +249,11 @@ export function NovaCommandCenter() {
         },
       }),
     });
-    const data = await response.json();
-    setResult(data);
+    return response.json();
+  }
+
+  async function requestLead(candidate: Candidate) {
+    setResult(await submitLead(candidate));
     await loadApprovals();
   }
 
@@ -257,9 +263,18 @@ export function NovaCommandCenter() {
     if (!chosen.length) return;
 
     setRunning(true);
+    setQueueing({ done: 0, total: chosen.length, failed: [] });
+    const failed: string[] = [];
     try {
-      for (const candidate of chosen) await requestLead(candidate);
+      // One at a time: each lead is an approval row, and a burst of parallel
+      // writes would race the duplicate check that protects the CRM.
+      for (const [index, candidate] of chosen.entries()) {
+        const data = await submitLead(candidate);
+        if (!data?.ok) failed.push(candidate.companyName);
+        setQueueing({ done: index + 1, total: chosen.length, failed: [...failed] });
+      }
       setSelected({});
+      // Reload once at the end rather than after every lead.
       await loadApprovals();
     } finally {
       setRunning(false);
@@ -363,7 +378,16 @@ export function NovaCommandCenter() {
 
   const campaign = isCampaignResult(result) ? result.data.candidates ?? [] : [];
   const productMatches = isProductSearchResult(result) ? result.data : null;
-  const selectedCount = campaign.filter((candidate) => selected[candidate.companyName] && candidate.importable && !candidate.duplicate).length;
+  // Duplicates and contactless places can never be imported, so they are not
+  // part of "all" — selecting them would promise something the queue refuses.
+  const selectable = campaign.filter((candidate) => candidate.importable && !candidate.duplicate);
+  const selectedCount = selectable.filter((candidate) => selected[candidate.companyName]).length;
+  const allSelected = selectable.length > 0 && selectedCount === selectable.length;
+
+  function toggleSelectAll() {
+    if (allSelected) { setSelected({}); return; }
+    setSelected(Object.fromEntries(selectable.map((candidate) => [candidate.companyName, true])));
+  }
 
   return <AppShell>
     <div className="mb-6"><Link href="/" className="inline-flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground"><ArrowLeft className="size-4" />Back to dashboard</Link></div>
@@ -436,16 +460,41 @@ export function NovaCommandCenter() {
 
     {campaign.length > 0 && <section className="mt-6 rounded-2xl border border-border bg-card p-5 md:p-7">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><div className="flex items-center gap-2"><Users className="size-5 text-primary" /><h2 className="font-display text-lg font-bold">HUNTER results</h2></div><p className="mt-1 text-xs text-muted-foreground">{campaign.length} candidates discovered. Select suitable new prospects to send to the approval queue.</p></div>
-        <Button disabled={running || selectedCount === 0} onClick={requestSelectedLeads}><ShieldCheck className="size-4" />Request approval ({selectedCount})</Button>
+        <div><div className="flex items-center gap-2"><Users className="size-5 text-primary" /><h2 className="font-display text-lg font-bold">HUNTER results</h2></div><p className="mt-1 text-xs text-muted-foreground">{campaign.length} discovered, {selectable.length} new and importable. Select prospects to send to the approval queue.</p></div>
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs font-semibold">
+            <input
+              type="checkbox"
+              className="size-4 rounded border-border"
+              checked={allSelected}
+              ref={(el) => { if (el) el.indeterminate = selectedCount > 0 && !allSelected; }}
+              disabled={running || selectable.length === 0}
+              onChange={toggleSelectAll}
+            />
+            {allSelected ? "Clear all" : `Select all ${selectable.length}`}
+          </label>
+          <Button disabled={running || selectedCount === 0} onClick={requestSelectedLeads}><ShieldCheck className="size-4" />Request approval ({selectedCount})</Button>
+        </div>
       </div>
+      {queueing && (
+        <div className="mt-3 rounded-lg border border-border bg-muted/30 p-3 text-xs">
+          {queueing.done < queueing.total
+            ? <span className="font-semibold">Queueing {queueing.done} of {queueing.total} for approval…</span>
+            : <span className="font-semibold">{queueing.total - queueing.failed.length} of {queueing.total} queued for approval. Nothing is contacted until you approve.</span>}
+          {queueing.failed.length > 0 && (
+            <p className="mt-1 text-amber-700 dark:text-amber-300">
+              Could not queue {queueing.failed.length}: {queueing.failed.slice(0, 5).join(", ")}{queueing.failed.length > 5 ? "…" : ""}
+            </p>
+          )}
+        </div>
+      )}
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         {campaign.map((candidate) => {
           const duplicate = Boolean(candidate.duplicate);
-          const selectable = Boolean(candidate.importable && !duplicate);
+          const canSelect = Boolean(candidate.importable && !duplicate);
           return <article key={candidate.companyName} className="rounded-xl border border-border p-4">
             <div className="flex gap-3">
-              {selectable && <input type="checkbox" checked={Boolean(selected[candidate.companyName])} onChange={(e) => setSelected((current) => ({ ...current, [candidate.companyName]: e.target.checked }))} className="mt-1 size-4 rounded border-border" />}
+              {canSelect && <input type="checkbox" checked={Boolean(selected[candidate.companyName])} onChange={(e) => setSelected((current) => ({ ...current, [candidate.companyName]: e.target.checked }))} className="mt-1 size-4 rounded border-border" />}
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div><h3 className="font-display font-bold">{candidate.companyName}</h3>{candidate.location && <p className="mt-0.5 text-[11px] text-muted-foreground">{candidate.location}</p>}</div>
