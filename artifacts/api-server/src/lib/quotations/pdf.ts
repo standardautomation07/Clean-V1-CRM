@@ -45,7 +45,7 @@ export interface PdfQuotation {
   terms: string;
   notes: string;
   items: PdfQuotationItem[];
-  customer: { companyName: string; contactName: string; phone: string; email: string; location: string | null };
+  customer: { companyName: string; contactName: string; phone: string; email: string; location: string | null; gstin?: string };
 }
 
 const ACCENT = "#e8683a";
@@ -105,7 +105,14 @@ export function renderQuotationPdf(quotation: PdfQuotation, options: RenderOptio
     const col = width / 2 - 10;
     doc.fillColor(MUTED).font("Helvetica").fontSize(8).text("QUOTATION FOR", left, y).text("FROM", left + col + 20, y);
     y += 11;
-    const customerLines = [quotation.customer.companyName, quotation.customer.contactName, quotation.customer.phone, quotation.customer.email, quotation.customer.location ?? ""].filter(Boolean);
+    const customerLines = [
+      quotation.customer.companyName,
+      quotation.customer.contactName,
+      quotation.customer.phone,
+      quotation.customer.email,
+      quotation.customer.location ?? "",
+      quotation.customer.gstin ? `GSTIN: ${quotation.customer.gstin}` : "",
+    ].filter(Boolean);
     const companyLines = [company.legalName, company.address, `GSTIN: ${company.gstin}`, `${company.phone}  ·  ${company.email}`, company.website];
     doc.fillColor(INK).font("Helvetica-Bold").fontSize(10).text(customerLines[0] ?? "", left, y, { width: col });
     doc.font("Helvetica").fontSize(9).text(customerLines.slice(1).join("\n"), left, y + 14, { width: col });

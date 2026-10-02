@@ -280,7 +280,7 @@ router.get("/quotations/:id/pdf", async (req, res): Promise<void> => {
   const pdf = await renderQuotationPdf({
     ...quotation,
     createdAt: found.row.createdAt,
-    customer: { companyName: lead.companyName, contactName: lead.contactName, phone: lead.phone, email: lead.email, location },
+    customer: { companyName: lead.companyName, contactName: lead.contactName, phone: lead.phone, email: lead.email, location, gstin: lead.gstin },
   });
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Content-Disposition", `inline; filename="${quotation.quotationNumber}.pdf"`);
