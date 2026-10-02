@@ -67,6 +67,7 @@ export function NovaCommandCenter() {
   const [includeDirectories, setIncludeDirectories] = useState(false);
   const [source, setSource] = useState<"maps" | "web">("maps");
   const [mapsLocation, setMapsLocation] = useState("");
+  const [mapsWaiting, setMapsWaiting] = useState(0);
   const [result, setResult] = useState<unknown>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [running, setRunning] = useState(false);
@@ -163,11 +164,38 @@ export function NovaCommandCenter() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tool, input }),
       });
-      setResult(await response.json());
+      const first = await response.json();
+      setResult(first);
+      // A Maps scrape of any size outlives the request that started it, so the
+      // server hands back a runId instead of results. Collect it here rather
+      // than leaving the operator looking at "pending" with nowhere to go.
+      const data = (first as { ok?: boolean; data?: { pending?: boolean; runId?: string } })?.data;
+      if (first?.ok && data?.pending && data.runId) {
+        await collectMapsRun(data.runId);
+      }
       await loadApprovals();
     } finally {
       setRunning(false);
     }
+  }
+
+  /** Poll a running Maps scrape until it finishes, or until it is clearly stuck. */
+  async function collectMapsRun(runId: string) {
+    const deadline = Date.now() + 5 * 60 * 1000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 8000));
+      setMapsWaiting(Math.round((Date.now() - (deadline - 5 * 60 * 1000)) / 1000));
+      const response = await fetch("/api/nova/execute", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tool: "hunter_maps_results", input: { runId, includeDirectories } }),
+      });
+      const next = await response.json();
+      if (!next?.ok) { setResult(next); break; }
+      if (!next.data?.pending) { setResult(next); break; }
+    }
+    setMapsWaiting(0);
   }
 
   async function enrichCandidate(candidate: Candidate) {
@@ -397,7 +425,13 @@ export function NovaCommandCenter() {
           users use enquiry forms, click-to-WhatsApp ads or trade lists instead.
         </p>
       )}
-      <div className="mt-6 flex gap-2"><Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder='Try: "Find rolling shutter motor distributors in UAE"' onKeyDown={(e) => { if (e.key === "Enter" && command.trim()) preview(command.trim()); }} /><Button disabled={running} onClick={() => command.trim() && preview(command.trim())}><Sparkles className="size-4" />{running ? "Researching…" : "Run"}</Button></div>
+      <div className="mt-6 flex gap-2"><Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder='Try: "Find rolling shutter motor distributors in UAE"' onKeyDown={(e) => { if (e.key === "Enter" && command.trim()) preview(command.trim()); }} /><Button disabled={running} onClick={() => command.trim() && preview(command.trim())}><Sparkles className="size-4" />{mapsWaiting ? `Scraping… ${mapsWaiting}s` : running ? "Researching…" : "Run"}</Button></div>
+      {mapsWaiting > 0 && (
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          A large Google Maps scrape keeps running after the request that started it returns.
+          Collecting the results — this usually takes a minute or two. Leave this page open.
+        </p>
+      )}
     </section>
 
     {campaign.length > 0 && <section className="mt-6 rounded-2xl border border-border bg-card p-5 md:p-7">
