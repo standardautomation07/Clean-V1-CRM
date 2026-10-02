@@ -10,6 +10,7 @@ import {
 import { calculateQuotation, type QuotationItemInput } from "../quotations/calc";
 import { commercialNovaTools } from "./commercial";
 import { hunterNovaTools } from "./hunter";
+import { mapsNovaTools } from "./maps";
 import { outreachNovaTools } from "./outreach";
 import type { NovaTool, NovaToolResult } from "./types";
 
@@ -412,6 +413,7 @@ export const novaTools: NovaTool[] = [
   scheduleSalesFollowup,
   ...commercialNovaTools,
   ...hunterNovaTools,
+  ...mapsNovaTools,
   ...outreachNovaTools,
 ];
 
