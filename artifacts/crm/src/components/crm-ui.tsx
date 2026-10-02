@@ -40,7 +40,6 @@ const navItems = [
   { href: '/leads', label: 'Leads', icon: LayoutList },
   { href: '/nova', label: 'NOVA', icon: Bot },
   { href: '/enquiry', label: 'New Enquiry', icon: Sparkles },
-  { href: '/nova', label: 'NOVA', icon: Sparkles },
   { href: '/follow-ups', label: 'Follow-ups', icon: CalendarDays },
   { href: '/customers', label: 'Customers', icon: Users },
 ];
