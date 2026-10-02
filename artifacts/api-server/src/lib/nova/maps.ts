@@ -26,6 +26,11 @@ function token(): string | null {
   return process.env.APIFY_TOKEN?.trim() || null;
 }
 
+/** Apify auth. Never as a query parameter: URLs end up in logs. */
+function authHeaders(): Record<string, string> {
+  return { Authorization: `Bearer ${token()}` };
+}
+
 interface ApifyPlace {
   title?: string;
   categoryName?: string;
@@ -123,7 +128,9 @@ async function qualify(ownerId: string, places: ApifyPlace[], includeDirectories
 }
 
 async function datasetItems(datasetId: string, limit: number): Promise<ApifyPlace[]> {
-  const r = await fetch(`${API}/datasets/${datasetId}/items?clean=true&format=json&limit=${limit}&token=${token()}`);
+  const r = await fetch(`${API}/datasets/${datasetId}/items?clean=true&format=json&limit=${limit}`, {
+    headers: authHeaders(),
+  });
   if (!r.ok) throw new Error(`Apify dataset read failed: ${r.status}`);
   return (await r.json()) as ApifyPlace[];
 }
@@ -149,9 +156,9 @@ const mapsCampaign: NovaTool = {
     const maxPlaces = Math.min(Math.max(Number(p.maxPlaces) || 50, 1), 300);
     const waitMs = Math.min(Math.max(Number(p.waitSeconds) || 40, 5), 50) * 1000;
 
-    const started = await fetch(`${API}/acts/${ACTOR}/runs?token=${token()}`, {
+    const started = await fetch(`${API}/acts/${ACTOR}/runs`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({
         searchStringsArray: [query],
         locationQuery: p.location?.trim() || undefined,
@@ -165,6 +172,9 @@ const mapsCampaign: NovaTool = {
     });
     if (!started.ok) {
       const text = await started.text().catch(() => "");
+      if (started.status === 401 || started.status === 403) {
+        return fail(this.name, "Apify rejected the configured APIFY_TOKEN. Check it is the Personal API token from Apify Console > Settings > API & Integrations (it starts with apify_api_), not the Apify user ID, and that it was pasted whole.");
+      }
       return fail(this.name, `Apify run could not be started: ${started.status} ${text.slice(0, 300)}`);
     }
     const run = ((await started.json()) as { data?: { id?: string; defaultDatasetId?: string } }).data ?? {};
@@ -176,7 +186,7 @@ const mapsCampaign: NovaTool = {
     let status = "RUNNING";
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, 3000));
-      const s = await fetch(`${API}/actor-runs/${runId}?token=${token()}`);
+      const s = await fetch(`${API}/actor-runs/${runId}`, { headers: authHeaders() });
       status = ((await s.json()) as { data?: { status?: string } }).data?.status ?? "RUNNING";
       if (status !== "RUNNING" && status !== "READY") break;
     }
@@ -223,7 +233,7 @@ const mapsResults: NovaTool = {
     if (!runId) return fail(this.name, "runId is required");
     if (!token()) return fail(this.name, "Google Maps prospecting is not configured on the server (APIFY_TOKEN)");
 
-    const s = await fetch(`${API}/actor-runs/${runId}?token=${token()}`);
+    const s = await fetch(`${API}/actor-runs/${runId}`, { headers: authHeaders() });
     if (!s.ok) return fail(this.name, `Apify run ${runId} could not be read: ${s.status}`);
     const data = ((await s.json()) as { data?: { status?: string; defaultDatasetId?: string } }).data ?? {};
     if (data.status !== "SUCCEEDED") {
