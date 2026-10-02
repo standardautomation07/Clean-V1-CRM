@@ -157,7 +157,8 @@ const mapsCampaign: NovaTool = {
         locationQuery: p.location?.trim() || undefined,
         maxCrawledPlacesPerSearch: maxPlaces,
         language: "en",
-        skipClosedPlaces: true,
+        // skipClosedPlaces is a billable filter add-on, and normalizePlace
+        // already drops closed places for free, so we don't pay for it.
         // Visits each business's own site for an email. Costs more per place.
         scrapeContacts: p.scrapeContacts === true,
       }),
