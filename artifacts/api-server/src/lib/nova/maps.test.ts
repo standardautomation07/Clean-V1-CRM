@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 process.env.DATABASE_URL ??= "postgresql://placeholder:placeholder@127.0.0.1:5432/placeholder";
-const { normalizePlace } = await import("./maps");
+const { normalizePlace, parseBrief } = await import("./maps");
 const { getNovaTool } = await import("./tools");
 
 test("a Maps place becomes a prospect with its contact details", () => {
@@ -65,4 +65,39 @@ test("it refuses clearly when APIFY_TOKEN is absent", async () => {
   } finally {
     if (saved) process.env.APIFY_TOKEN = saved;
   }
+});
+
+test("a natural-language brief becomes a Maps search term, place and count", () => {
+  // The brief that returned a single result in production.
+  const b = parseBrief("find 50 rolling shuuter manufacturers in kerala");
+  assert.equal(b.query, "rolling shuuter manufacturers");
+  assert.equal(b.location, "kerala");
+  assert.equal(b.maxPlaces, 50);
+});
+
+test("a bare search term is left alone", () => {
+  const b = parseBrief("rolling shutter dealers");
+  assert.equal(b.query, "rolling shutter dealers");
+  assert.equal(b.location, undefined);
+  assert.equal(b.maxPlaces, undefined);
+});
+
+test("other lead-ins and prepositions are understood", () => {
+  assert.deepEqual(parseBrief("show me top 20 shutter installers near Surat"), {
+    query: "shutter installers",
+    location: "Surat",
+    maxPlaces: 20,
+  });
+  assert.deepEqual(parseBrief("Please find garage door suppliers around Pune."), {
+    query: "garage door suppliers",
+    location: "Pune",
+    maxPlaces: undefined,
+  });
+});
+
+test("a preposition is only a place when something is left to search for", () => {
+  // Treating "bulk" as the location would leave nothing to search for.
+  const b = parseBrief("in bulk");
+  assert.equal(b.query, "in bulk");
+  assert.equal(b.location, undefined);
 });

@@ -61,6 +61,49 @@ export interface MapsProspect {
   fitReason?: string;
 }
 
+// People type briefs, not search terms: "find 50 rolling shutter manufacturers
+// in kerala". Google Maps wants what you would type into its own search bar —
+// "rolling shutter manufacturers" — with the place and the count supplied
+// separately. Passing the whole sentence through returns almost nothing.
+const LEAD_IN = /^\s*(?:please\s+)?(?:can\s+you\s+)?(?:go\s+)?(?:and\s+)?(?:find|get|fetch|search(?:\s+for)?|look\s+for|show|list|give|discover|prospect|hunt(?:\s+for)?)\s+(?:me\s+)?(?:all\s+(?:the\s+)?)?(?:some\s+)?/i;
+const PLACE_PREPOSITION = /\s+(?:in|near|around|from|at|across)\s+([^.;]+?)\s*$/i;
+
+export interface ParsedBrief {
+  query: string;
+  location?: string;
+  maxPlaces?: number;
+}
+
+/** Split a natural-language brief into a Maps search term, place and count. */
+export function parseBrief(raw: string): ParsedBrief {
+  let text = String(raw ?? "").trim().replace(/[.?!]+$/, "");
+  text = text.replace(LEAD_IN, "");
+
+  // A count anywhere up front: "50 rolling shutter dealers", "top 20 ...".
+  let maxPlaces: number | undefined;
+  const count = text.match(/^(?:top\s+|first\s+)?(\d{1,4})\s+/i);
+  if (count) {
+    maxPlaces = Number(count[1]);
+    text = text.slice(count[0].length);
+  }
+
+  // The place is whatever trails the last locational preposition.
+  let location: string | undefined;
+  const place = text.match(PLACE_PREPOSITION);
+  if (place?.index !== undefined) {
+    const candidate = place[1].trim();
+    const head = text.slice(0, place.index).trim();
+    // "dealers in bulk" is not a place, and a bare preposition must leave
+    // something to actually search for.
+    if (candidate && head) {
+      location = candidate;
+      text = head;
+    }
+  }
+
+  return { query: text.trim(), location, maxPlaces };
+}
+
 /** A Maps place only becomes a prospect if it can actually be contacted. */
 export function normalizePlace(place: ApifyPlace): MapsProspect | null {
   const companyName = String(place.title ?? "").trim();
@@ -153,15 +196,21 @@ const mapsCampaign: NovaTool = {
     if (!query) return fail(this.name, "query is required, for example \"rolling shutter dealers\"");
     if (!token()) return fail(this.name, "Google Maps prospecting is not configured on the server (APIFY_TOKEN)");
 
-    const maxPlaces = Math.min(Math.max(Number(p.maxPlaces) || 50, 1), 300);
+    // The location box, when filled, beats a place guessed from the sentence.
+    // A count is the other way round: "find 50 ..." is something the person
+    // just typed, where maxPlaces is only the caller's standing default.
+    const brief = parseBrief(query);
+    const searchTerm = brief.query || query;
+    const location = p.location?.trim() || brief.location;
+    const maxPlaces = Math.min(Math.max(brief.maxPlaces || Number(p.maxPlaces) || 50, 1), 300);
     const waitMs = Math.min(Math.max(Number(p.waitSeconds) || 40, 5), 50) * 1000;
 
     const started = await fetch(`${API}/acts/${ACTOR}/runs`, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({
-        searchStringsArray: [query],
-        locationQuery: p.location?.trim() || undefined,
+        searchStringsArray: [searchTerm],
+        locationQuery: location || undefined,
         maxCrawledPlacesPerSearch: maxPlaces,
         language: "en",
         // skipClosedPlaces is a billable filter add-on, and normalizePlace
@@ -207,7 +256,10 @@ const mapsCampaign: NovaTool = {
     const candidates = await qualify(context.ownerId, places, p.includeDirectories === true);
     return ok(this.name, {
       query,
-      location: p.location?.trim() ?? null,
+      // What we actually asked Google Maps, so a thin result is diagnosable.
+      searchTerm,
+      location: location ?? null,
+      maxPlaces,
       runId,
       datasetId,
       status,
@@ -217,7 +269,9 @@ const mapsCampaign: NovaTool = {
       withPhone: candidates.filter((c) => c.phone).length,
       withEmail: candidates.filter((c) => c.email).length,
       candidates,
-      nextStep: "Select candidates and submit hunter_create_lead requests. Lead creation remains approval-gated.",
+      nextStep: candidates.length
+        ? "Select candidates and submit hunter_create_lead requests. Lead creation remains approval-gated."
+        : `Google Maps returned ${places.length} place(s) for "${searchTerm}"${location ? ` in ${location}` : ""}. Try a shorter trade term, the kind you would type into Google Maps itself, such as "rolling shutter manufacturer", and put the city or state in the location box.`,
     });
   },
 };
