@@ -130,20 +130,28 @@ export function NovaCommandCenter() {
   async function preview(commandText: string) {
     setRunning(true);
     setSelected({});
-    const text = commandText.toLowerCase();
-    let tool = "search_products";
-    let input: Record<string, unknown> = { query: commandText };
+    // This box is the HUNTER brief, so prospecting is the default. Guessing
+    // the tool from stray keywords sent "rolling shutters rajkot" to the
+    // product catalogue, which is not what anyone typing here wants. Anything
+    // else is reached with an explicit prefix.
+    const text = commandText.trim();
+    let tool = "hunter_run_campaign";
+    let input: Record<string, unknown> = { brief: text, maxResults: 15, intent: searchIntent, includeDirectories };
 
-    const hunterIntent = /(find|discover|prospect|hunter|distributor|dealer|installer|integrator|supplier|reseller|companies)/i.test(commandText);
-    if (hunterIntent) {
-      tool = "hunter_run_campaign";
-      input = { brief: commandText, maxResults: 15, intent: searchIntent, includeDirectories };
-    } else if (text.includes("quotation")) {
-      tool = "calculate_quotation_preview";
-      input = { items: [], taxRate: 18 };
-    } else if (text.includes("lead")) {
-      tool = "list_leads";
-      input = { search: commandText };
+    const prefixed = /^(products?|catalogue|catalog|leads?|quotation)\s*:\s*/i.exec(text);
+    if (prefixed) {
+      const rest = text.slice(prefixed[0].length).trim();
+      const kind = prefixed[1].toLowerCase();
+      if (kind.startsWith("product") || kind.startsWith("catalog")) {
+        tool = "search_products";
+        input = { query: rest };
+      } else if (kind.startsWith("lead")) {
+        tool = "list_leads";
+        input = { search: rest };
+      } else {
+        tool = "calculate_quotation_preview";
+        input = { items: [], taxRate: 18 };
+      }
     }
 
     try {
@@ -361,7 +369,13 @@ export function NovaCommandCenter() {
           users use enquiry forms, click-to-WhatsApp ads or trade lists instead.
         </p>
       )}
-      <div className="mt-6 flex gap-2"><Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder='Try: "Find rolling shutter motor distributors in UAE"' onKeyDown={(e) => { if (e.key === "Enter" && command.trim()) preview(command.trim()); }} /><Button disabled={running} onClick={() => command.trim() && preview(command.trim())}><Sparkles className="size-4" />{running ? "Researching…" : "Run"}</Button></div>
+      <div className="mt-6 flex gap-2"><Input value={command} onChange={(e) => setCommand(e.target.value)} placeholder='Try: "rolling shutters Rajkot" or "shutter dealers in UAE"' onKeyDown={(e) => { if (e.key === "Enter" && command.trim()) preview(command.trim()); }} /><Button disabled={running} onClick={() => command.trim() && preview(command.trim())}><Sparkles className="size-4" />{running ? "Researching…" : "Run"}</Button></div>
+      <p className="mt-2 text-[11px] text-muted-foreground">
+        Searches the web for prospects. To use NOVA for something else, prefix the command:
+        <code className="mx-1 rounded bg-muted px-1 py-0.5">products:</code>sliding gate motor,
+        <code className="mx-1 rounded bg-muted px-1 py-0.5">leads:</code>Surat,
+        <code className="mx-1 rounded bg-muted px-1 py-0.5">quotation:</code>
+      </p>
     </section>
 
     {campaign.length > 0 && <section className="mt-6 rounded-2xl border border-border bg-card p-5 md:p-7">
