@@ -10,6 +10,7 @@ import {
 import { calculateQuotation, type QuotationItemInput } from "../quotations/calc";
 import { commercialNovaTools } from "./commercial";
 import { hunterNovaTools } from "./hunter";
+import { outreachNovaTools } from "./outreach";
 import type { NovaTool, NovaToolResult } from "./types";
 
 function money(value: string | number): number { return Number(value); }
@@ -411,6 +412,7 @@ export const novaTools: NovaTool[] = [
   scheduleSalesFollowup,
   ...commercialNovaTools,
   ...hunterNovaTools,
+  ...outreachNovaTools,
 ];
 
 export function getNovaTool(name: string): NovaTool | undefined {

@@ -7,3 +7,4 @@ export * from "./quotations";
 export * from "./commercial-documents";
 export * from "./nova-approvals";
 export * from "./whatsapp-messages";
+export * from "./outreach";
