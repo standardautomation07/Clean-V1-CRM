@@ -18,6 +18,18 @@ test("directory and marketplace listings are not prospects", () => {
   }
 });
 
+test("hosts seen in the live Surat campaigns are filtered", () => {
+  for (const url of [
+    "https://www.dial4trade.com/gayatri-rolling-shutter-fabrication-398078",
+    "https://www.indianyellowpages.com/surat/vikas-rolling-shutter-udhna-surat-1326231",
+    "https://www.magicbricks.com/warehouse-godown-for-rent-in-surat-pppfr",
+    "https://propertywala.com/properties/type-commercial_warehouse_godown/for-rent/location-surat_gujarat",
+    "https://www.propertyinsurat.in/warehouse-godown-for-sale-in-surat.htm",
+    "https://suratvrproperties.com/warehouse-godown-for-sale-in-surat",
+  ]) {
+    assert.equal(isDirectoryUrl(url), true, `should be filtered: ${url}`);
+  }
+});
 test("real company sites are kept", () => {
   for (const url of [
     "https://newazadrollingshutters.com",
