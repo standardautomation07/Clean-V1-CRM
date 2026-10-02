@@ -1,10 +1,11 @@
 import type { Lead, Quotation } from '@workspace/api-client-react';
 import { getGetQuotationPdfUrl } from '@workspace/api-client-react';
-import { ArrowUpRight, CheckCircle2, FileText, Pencil } from 'lucide-react';
+import { ArrowUpRight, CheckCircle2, FileText, Mail, MessageCircle, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PageHeading, SectionLabel } from '@/components/crm-ui';
 import { formatInr } from '@/lib/quotation-math';
 import { CalendarDateLabel } from './follow-up-step';
+import { mailtoHref, quotationMessage, quotationSubject, whatsappHref } from '@/lib/quotation-share';
 
 interface QuotationStepProps {
   lead: Lead;
@@ -21,6 +22,22 @@ export function quotationPdfHref(id: number): string {
 
 export function QuotationStep({ lead, quotation, onEdit, onGenerate, generating, onContinue }: QuotationStepProps) {
   const generated = quotation.status === 'Generated';
+  const companyName = 'Rollvento';
+  const message = quotationMessage(lead, quotation, companyName);
+  const whatsapp = whatsappHref(lead.phone, message);
+  const mail = mailtoHref(lead.email, quotationSubject(quotation, companyName), message);
+
+  // Neither WhatsApp nor a mail client accepts an attachment from a link, so
+  // fetch the PDF first and let the browser save it; the sender attaches it.
+  function shareVia(href: string) {
+    const link = document.createElement('a');
+    link.href = quotationPdfHref(quotation.id);
+    link.download = `${quotation.quotationNumber}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.open(href, '_blank', 'noopener,noreferrer');
+  }
   return <>
     <PageHeading eyebrow="Step 5 · Quotation" title={quotation.quotationNumber} description={generated ? 'Generated and recorded on the lead. Download the PDF or continue to schedule the follow-up.' : 'Review the saved quotation. Generate it to lock the number on the lead and produce the PDF.'} action={<span className={`status-pill ${generated ? 'status-won' : 'status-proposal'}`} data-testid="text-quotation-status">{quotation.status}</span>} />
     <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
@@ -53,6 +70,29 @@ export function QuotationStep({ lead, quotation, onEdit, onGenerate, generating,
           <div className="flex flex-col gap-2">
             {!generated && <Button onClick={onGenerate} disabled={generating} data-testid="button-generate-quotation" className="w-full">{generating ? 'Generating…' : 'Generate Quotation'}<FileText className="size-4" /></Button>}
             {generated && <a href={quotationPdfHref(quotation.id)} target="_blank" rel="noreferrer" data-testid="link-download-pdf" className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-md border border-primary-border bg-primary px-4 text-sm font-medium text-primary-foreground"><FileText className="size-4" />Download / View Quotation PDF</a>}
+            {generated && (
+              <div className="mt-1 space-y-2 border-t border-border pt-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">Send to customer</p>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  disabled={!whatsapp}
+                  data-testid="button-share-whatsapp"
+                  onClick={() => whatsapp && shareVia(whatsapp)}
+                ><MessageCircle className="size-4" />{whatsapp ? 'WhatsApp this quotation' : 'No phone number on the lead'}</Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  disabled={!mail}
+                  data-testid="button-share-email"
+                  onClick={() => mail && shareVia(mail)}
+                ><Mail className="size-4" />{mail ? 'Email this quotation' : 'No email on the lead'}</Button>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  The PDF downloads and the message opens ready to send — attach the downloaded file before sending.
+                  Nothing leaves the CRM on its own.
+                </p>
+              </div>
+            )}
             <Button variant="outline" onClick={onEdit} disabled={generating} data-testid="button-edit-quotation" className="w-full"><Pencil className="size-4" />Edit pricing</Button>
             {generated && <Button onClick={onContinue} data-testid="button-continue-follow-up" className="w-full" variant="secondary">Next: schedule follow-up<ArrowUpRight className="size-4" /></Button>}
           </div>

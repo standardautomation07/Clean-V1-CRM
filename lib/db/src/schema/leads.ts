@@ -12,6 +12,8 @@ export const leadsTable = pgTable("leads", {
   contactName: varchar("contact_name", { length: 200 }).notNull(),
   phone: varchar("phone", { length: 50 }).notNull().default(""),
   email: varchar("email", { length: 320 }).notNull(),
+  // The buyer's tax registration, printed on the quotation beside ours.
+  gstin: varchar("gstin", { length: 20 }).notNull().default(""),
   source: leadSourceEnum("source").notNull(),
   requirement: text("requirement").notNull().default(""),
   estimatedValue: numeric("estimated_value", { precision: 12, scale: 2 }).notNull().default("0"),

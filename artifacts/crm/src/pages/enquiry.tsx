@@ -46,10 +46,12 @@ function blankForm(): EnquiryForm {
 }
 
 function blankPricing(): PricingFormState {
-  return { lines: [], taxRate: '18', validUntil: todayPlusDays(30), terms: DEFAULT_TERMS, notes: '' };
+  return { lines: [], gstin: '', taxRate: '18', validUntil: todayPlusDays(30), terms: DEFAULT_TERMS, notes: '' };
 }
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Standard Indian GSTIN: state code, PAN, entity digit, 'Z', checksum.
+const GSTIN_PATTERN = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
 
 // The guided AI Sales Agent workflow:
 // Enquiry -> Product (AI review) -> Lead -> Pricing -> Quotation -> Follow-up.
@@ -85,6 +87,7 @@ export function NewEnquiry() {
   useEffect(() => {
     if (existingLead.data?.lead && !lead) {
       setLead(existingLead.data.lead);
+      setPricing((current) => ({ ...current, gstin: existingLead.data.lead.gstin ?? '' }));
       setStep('pricing');
     }
   }, [existingLead.data, lead]);
@@ -174,8 +177,21 @@ export function NewEnquiry() {
     if (lines.some((line) => !line.productName)) { toast({ variant: 'destructive', title: 'Every line needs a description' }); return; }
     if (lines.some((line) => line.unitPrice <= 0)) { toast({ variant: 'destructive', title: 'Enter a unit price for every line', description: 'Prices must come from you; the AI does not suggest them.' }); return; }
     const body = { items: lines, taxRate: Number(pricing.taxRate) || 0, validUntil: pricing.validUntil || null, terms: pricing.terms, notes: pricing.notes };
+    const gstin = pricing.gstin.trim();
+    if (gstin && !GSTIN_PATTERN.test(gstin)) {
+      toast({ variant: 'destructive', title: 'Check the buyer GSTIN', description: 'A GSTIN is 15 characters, like 24AAACR1234R1ZX. Leave it empty if you do not have it.' });
+      return;
+    }
     setBusy(true);
     try {
+      if (gstin !== (lead.gstin ?? '')) {
+        try {
+          const updated = await updateLead.mutateAsync({ id: lead.id, data: { gstin } });
+          setLead(updated);
+        } catch (error) {
+          toast({ title: 'GSTIN not saved', description: errorMessage(error, 'The quotation will be saved without it.') });
+        }
+      }
       const saved = quotation
         ? await updateQuotation.mutateAsync({ id: quotation.id, data: body })
         : await createQuotation.mutateAsync({ data: { leadId: lead.id, ...body } });
@@ -193,7 +209,7 @@ export function NewEnquiry() {
 
   function editQuotation() {
     if (quotation) {
-      setPricing({ lines: quotation.items.map((item) => newLine({ productModel: item.productModel, productName: item.productName, quantity: String(item.quantity), unit: item.unit, unitPrice: String(item.unitPrice), discount: String(item.discount) })), taxRate: String(quotation.taxRate), validUntil: quotation.validUntil ?? '', terms: quotation.terms, notes: quotation.notes });
+      setPricing({ lines: quotation.items.map((item) => newLine({ productModel: item.productModel, productName: item.productName, quantity: String(item.quantity), unit: item.unit, unitPrice: String(item.unitPrice), discount: String(item.discount) })), gstin: lead?.gstin ?? '', taxRate: String(quotation.taxRate), validUntil: quotation.validUntil ?? '', terms: quotation.terms, notes: quotation.notes });
     }
     setStep('pricing');
   }

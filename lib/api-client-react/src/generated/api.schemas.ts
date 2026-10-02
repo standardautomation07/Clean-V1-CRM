@@ -98,6 +98,11 @@ export interface Lead {
   contactName: string;
   phone: string;
   email: string;
+  /**
+     * The buyer's GST identification number, printed on the quotation. Empty when not known.
+     * @maxLength 20
+     */
+  gstin?: string;
   source: LeadSource;
   requirement: string;
   estimatedValue: number;
@@ -145,6 +150,12 @@ export interface LeadInput {
      * @pattern ^$|^[^\s@]+@[^\s@]+\.[^\s@]+$
      */
   email: string;
+  /**
+     * The buyer's GSTIN, printed on the quotation. Empty when not known; otherwise the standard 15-character Indian GST registration format.
+     * @maxLength 20
+     * @pattern ^$|^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$
+     */
+  gstin?: string;
   source: LeadSource;
   requirement: string;
   /** @minimum 0 */
@@ -165,6 +176,12 @@ export interface LeadUpdate {
      * @pattern ^$|^[^\s@]+@[^\s@]+\.[^\s@]+$
      */
   email?: string;
+  /**
+     * The buyer's GSTIN, printed on the quotation. Empty when not known; otherwise the standard 15-character Indian GST registration format.
+     * @maxLength 20
+     * @pattern ^$|^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$
+     */
+  gstin?: string;
   source?: LeadSource;
   requirement?: string;
   /** @minimum 0 */

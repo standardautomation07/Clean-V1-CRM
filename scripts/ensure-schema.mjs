@@ -92,6 +92,7 @@ const statements = [
      contact_name varchar(200) NOT NULL,
      phone varchar(50) NOT NULL DEFAULT '',
      email varchar(320) NOT NULL,
+     gstin varchar(20) NOT NULL DEFAULT '',
      source lead_source NOT NULL,
      requirement text NOT NULL DEFAULT '',
      estimated_value numeric(12,2) NOT NULL DEFAULT 0,
@@ -262,6 +263,15 @@ const statements = [
   `CREATE INDEX IF NOT EXISTS outreach_emails_to_idx ON outreach_emails (to_email)`,
 ];
 
+// Columns added to tables that already exist. The table check below skips all
+// DDL once every table is present, which is right for a least-privilege role
+// but would silently miss a new column. These are additive and idempotent, so
+// they are safe to attempt on every deploy, and a permission error on them is
+// reported without failing the deployment.
+const ADDITIVE_COLUMNS = [
+  `ALTER TABLE leads ADD COLUMN IF NOT EXISTS gstin varchar(20) NOT NULL DEFAULT ''`,
+];
+
 /** Every table the application expects to exist. */
 const REQUIRED_TABLES = [
   "activities",
@@ -324,6 +334,21 @@ try {
       }
       console.log(`ensure-schema: ok tables= ${[...after].sort().join(",")}`);
     }
+
+    // Runs whether or not the tables were just created, because a column added
+    // to an existing table is exactly the case the check above skips.
+    for (const sql of ADDITIVE_COLUMNS) {
+      try {
+        await client.query(sql);
+      } catch (err) {
+        if (err && err.code === "42501") {
+          console.error(`ensure-schema: could not apply "${sql}" (permission denied). Apply lib/db/migrations/*.sql as the database owner.`);
+        } else {
+          throw err;
+        }
+      }
+    }
+    console.log(`ensure-schema: additive columns checked (${ADDITIVE_COLUMNS.length})`);
   } finally {
     client.release();
   }

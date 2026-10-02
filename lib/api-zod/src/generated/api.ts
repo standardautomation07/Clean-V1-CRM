@@ -105,6 +105,8 @@ export const LogoutMobileSessionResponse = zod.object({
 /**
  * @summary Get dashboard totals and recent CRM activity
  */
+export const getDashboardSummaryResponseRecentLeadsItemGstinMax = 20;
+
 export const getDashboardSummaryResponseRecentLeadsItemNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const getDashboardSummaryResponseTodaysFollowUpsItemNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
@@ -121,6 +123,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "contactName": zod.string(),
   "phone": zod.string(),
   "email": zod.string(),
+  "gstin": zod.string().max(getDashboardSummaryResponseRecentLeadsItemGstinMax).optional().describe('The buyer\'s GST identification number, printed on the quotation. Empty when not known.'),
   "source": zod.enum(['Website', 'WhatsApp', 'Phone', 'Email', 'Referral', 'Other']),
   "requirement": zod.string(),
   "estimatedValue": zod.number(),
@@ -153,6 +156,8 @@ export const ListLeadsQueryParams = zod.object({
   "sort": zod.enum(['newest', 'oldest', 'follow_up']).default(listLeadsQuerySortDefault)
 })
 
+export const listLeadsResponseGstinMax = 20;
+
 export const listLeadsResponseNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
@@ -162,6 +167,7 @@ export const ListLeadsResponseItem = zod.object({
   "contactName": zod.string(),
   "phone": zod.string(),
   "email": zod.string(),
+  "gstin": zod.string().max(listLeadsResponseGstinMax).optional().describe('The buyer\'s GST identification number, printed on the quotation. Empty when not known.'),
   "source": zod.enum(['Website', 'WhatsApp', 'Phone', 'Email', 'Referral', 'Other']),
   "requirement": zod.string(),
   "estimatedValue": zod.number(),
@@ -181,6 +187,10 @@ export const ListLeadsResponse = zod.array(ListLeadsResponseItem)
 
 
 export const createLeadBodyEmailRegExp = new RegExp('^$|^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
+export const createLeadBodyGstinMax = 20;
+
+
+export const createLeadBodyGstinRegExp = new RegExp('^$|^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$');
 export const createLeadBodyEstimatedValueMin = 0;
 
 export const createLeadBodyNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
@@ -191,6 +201,7 @@ export const CreateLeadBody = zod.object({
   "contactName": zod.string().min(1),
   "phone": zod.string(),
   "email": zod.string().regex(createLeadBodyEmailRegExp).describe('Valid email address, or an empty string when the email is not known.'),
+  "gstin": zod.string().max(createLeadBodyGstinMax).regex(createLeadBodyGstinRegExp).optional().describe('The buyer\'s GSTIN, printed on the quotation. Empty when not known; otherwise the standard 15-character Indian GST registration format.'),
   "source": zod.enum(['Website', 'WhatsApp', 'Phone', 'Email', 'Referral', 'Other']),
   "requirement": zod.string(),
   "estimatedValue": zod.number().min(createLeadBodyEstimatedValueMin),
@@ -198,6 +209,8 @@ export const CreateLeadBody = zod.object({
   "nextFollowUp": zod.string().regex(createLeadBodyNextFollowUpRegExp).nullable().describe('Calendar date as YYYY-MM-DD, or null.'),
   "notes": zod.string()
 })
+
+export const createLeadResponseGstinMax = 20;
 
 export const createLeadResponseNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
@@ -208,6 +221,7 @@ export const CreateLeadResponse = zod.object({
   "contactName": zod.string(),
   "phone": zod.string(),
   "email": zod.string(),
+  "gstin": zod.string().max(createLeadResponseGstinMax).optional().describe('The buyer\'s GST identification number, printed on the quotation. Empty when not known.'),
   "source": zod.enum(['Website', 'WhatsApp', 'Phone', 'Email', 'Referral', 'Other']),
   "requirement": zod.string(),
   "estimatedValue": zod.number(),
@@ -227,6 +241,8 @@ export const GetLeadParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const getLeadResponseLeadGstinMax = 20;
+
 export const getLeadResponseLeadNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
 
@@ -237,6 +253,7 @@ export const GetLeadResponse = zod.object({
   "contactName": zod.string(),
   "phone": zod.string(),
   "email": zod.string(),
+  "gstin": zod.string().max(getLeadResponseLeadGstinMax).optional().describe('The buyer\'s GST identification number, printed on the quotation. Empty when not known.'),
   "source": zod.enum(['Website', 'WhatsApp', 'Phone', 'Email', 'Referral', 'Other']),
   "requirement": zod.string(),
   "estimatedValue": zod.number(),
@@ -268,6 +285,10 @@ export const UpdateLeadParams = zod.object({
 
 
 export const updateLeadBodyEmailRegExp = new RegExp('^$|^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
+export const updateLeadBodyGstinMax = 20;
+
+
+export const updateLeadBodyGstinRegExp = new RegExp('^$|^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$');
 export const updateLeadBodyEstimatedValueMin = 0;
 
 export const updateLeadBodyNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
@@ -278,6 +299,7 @@ export const UpdateLeadBody = zod.object({
   "contactName": zod.string().min(1).optional(),
   "phone": zod.string().optional(),
   "email": zod.string().regex(updateLeadBodyEmailRegExp).optional().describe('Valid email address, or an empty string when the email is not known.'),
+  "gstin": zod.string().max(updateLeadBodyGstinMax).regex(updateLeadBodyGstinRegExp).optional().describe('The buyer\'s GSTIN, printed on the quotation. Empty when not known; otherwise the standard 15-character Indian GST registration format.'),
   "source": zod.enum(['Website', 'WhatsApp', 'Phone', 'Email', 'Referral', 'Other']).optional(),
   "requirement": zod.string().optional(),
   "estimatedValue": zod.number().min(updateLeadBodyEstimatedValueMin).optional(),
@@ -285,6 +307,8 @@ export const UpdateLeadBody = zod.object({
   "nextFollowUp": zod.string().regex(updateLeadBodyNextFollowUpRegExp).nullish().describe('Calendar date as YYYY-MM-DD, or null.'),
   "notes": zod.string().optional()
 })
+
+export const updateLeadResponseGstinMax = 20;
 
 export const updateLeadResponseNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 
@@ -295,6 +319,7 @@ export const UpdateLeadResponse = zod.object({
   "contactName": zod.string(),
   "phone": zod.string(),
   "email": zod.string(),
+  "gstin": zod.string().max(updateLeadResponseGstinMax).optional().describe('The buyer\'s GST identification number, printed on the quotation. Empty when not known.'),
   "source": zod.enum(['Website', 'WhatsApp', 'Phone', 'Email', 'Referral', 'Other']),
   "requirement": zod.string(),
   "estimatedValue": zod.number(),

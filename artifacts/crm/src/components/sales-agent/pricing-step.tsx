@@ -21,6 +21,8 @@ export interface PricingLineState {
 
 export interface PricingFormState {
   lines: PricingLineState[];
+  /** The buyer's GSTIN. Saved back to the lead so it prints on the PDF. */
+  gstin: string;
   taxRate: string;
   validUntil: string;
   terms: string;
@@ -103,8 +105,15 @@ export function PricingStep({ lead, form, onChange, catalogue, onSave, saving, e
         </section>
 
         <section className="rounded-xl border border-border bg-card p-5 md:p-6">
-          <SectionLabel>Tax, validity & terms</SectionLabel>
+          <SectionLabel>Buyer GST, tax, validity & terms</SectionLabel>
           <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Buyer GSTIN (optional)"
+              value={form.gstin}
+              onChange={(v) => onChange({ ...form, gstin: v.toUpperCase().replace(/[^0-9A-Z]/g, "").slice(0, 15) })}
+              placeholder="24AAACR1234R1ZX"
+              testId="input-buyer-gstin"
+            />
             <Field label="GST %" value={form.taxRate} onChange={(v) => onChange({ ...form, taxRate: v })} type="number" min={0} step="0.5" testId="input-tax-rate" />
             <Field label="Valid until" value={form.validUntil} onChange={(v) => onChange({ ...form, validUntil: v })} type="date" testId="input-valid-until" />
           </div>
@@ -134,6 +143,7 @@ export function PricingStep({ lead, form, onChange, catalogue, onSave, saving, e
           <p className="font-display text-base font-bold tracking-[-0.03em]">Lead #{lead.id}</p>
           <p className="mt-1 text-sm">{lead.companyName}</p>
           <p className="text-xs text-sidebar-foreground/70">{lead.contactName}{lead.phone ? ` · ${lead.phone}` : ''}</p>
+          {form.gstin && <p className="mt-1 font-mono text-[11px] text-sidebar-foreground/70">GSTIN {form.gstin}</p>}
           <p className="mt-3 text-[11px] leading-relaxed text-sidebar-foreground/60">{lead.requirement}</p>
         </section>
       </aside>

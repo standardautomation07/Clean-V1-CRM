@@ -15,6 +15,11 @@ export interface Lead {
   contactName: string;
   phone: string;
   email: string;
+  /**
+     * The buyer's GST identification number, printed on the quotation. Empty when not known.
+     * @maxLength 20
+     */
+  gstin?: string;
   source: LeadSource;
   requirement: string;
   estimatedValue: number;
