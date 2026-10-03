@@ -7,7 +7,7 @@ import {
   QuotationStatus,
   type QuotationSummary,
 } from '@workspace/api-client-react';
-import { ExternalLink, FileText, ShieldCheck } from 'lucide-react';
+import { Download, ExternalLink, FileText, ShieldCheck } from 'lucide-react';
 import { AppShell, EmptyState, PageHeading, QueryError, SectionLabel, SkeletonBlock } from '@/components/crm-ui';
 import { Button } from '@/components/ui/button';
 import { formatInr } from '@/lib/quotation-math';
@@ -33,6 +33,7 @@ export function SalesOrders() {
   const [selectedId, setSelectedId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [outcome, setOutcome] = useState<{ ok: boolean; message: string } | null>(null);
+  const [openId, setOpenId] = useState<number | null>(null);
 
   const quotations = useQuery({
     queryKey: ['quotations', 'Generated'],
@@ -162,14 +163,83 @@ export function SalesOrders() {
             ? <EmptyState title="No Sales Orders yet" description="Raise one from a generated quotation above." />
             : <div className="divide-y divide-border">
                 {(documents.data ?? []).map((doc) => (
-                  <div key={doc.id} className="grid gap-2 py-3 sm:grid-cols-[1.1fr_1.2fr_1fr_auto] sm:items-center">
-                    <p className="font-mono text-xs font-bold">{doc.documentNumber}</p>
-                    <p className="text-xs text-muted-foreground">{doc.customerSnapshot?.companyName ?? `Lead #${doc.leadId}`}</p>
-                    <p className="font-mono text-xs font-semibold">{doc.totals?.total === undefined ? '—' : formatInr(doc.totals.total)}</p>
-                    <span className="status-pill status-won">{doc.status}</span>
+                  <div key={doc.id} className="py-3">
+                    <div className="grid gap-2 sm:grid-cols-[1.1fr_1.2fr_1fr_auto_auto] sm:items-center">
+                      <p className="font-mono text-xs font-bold">{doc.documentNumber}</p>
+                      <p className="text-xs text-muted-foreground">{doc.customerSnapshot?.companyName ?? `Lead #${doc.leadId}`}</p>
+                      <p className="font-mono text-xs font-semibold">{doc.totals?.total === undefined ? '—' : formatInr(doc.totals.total)}</p>
+                      <span className="status-pill status-won">{doc.status}</span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setOpenId(openId === doc.id ? null : doc.id)}
+                          data-testid={`button-open-sales-order-${doc.id}`}
+                          className="text-xs font-semibold text-primary hover:underline"
+                        >{openId === doc.id ? 'Hide' : 'Open'}</button>
+                        <a
+                          href={`/api/documents/${doc.id}/pdf`}
+                          target="_blank"
+                          rel="noreferrer"
+                          data-testid={`link-sales-order-pdf-${doc.id}`}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                        ><FileText className="size-3.5" />View PDF</a>
+                        <a
+                          href={`/api/documents/${doc.id}/pdf`}
+                          download={`${doc.documentNumber}.pdf`}
+                          data-testid={`link-sales-order-download-${doc.id}`}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                        ><Download className="size-3.5" />Save</a>
+                      </div>
+                    </div>
+                    {openId === doc.id && <SalesOrderDetail documentId={doc.id} />}
                   </div>
                 ))}
               </div>}
     </section>
   </AppShell>;
+}
+
+interface DocumentItem {
+  id: number;
+  productModel: string;
+  productName: string;
+  quantity: number | string;
+  unit: string;
+  unitPrice: number | string;
+  lineTotal: number | string;
+}
+
+function SalesOrderDetail({ documentId }: { documentId: number }) {
+  const detail = useQuery({
+    queryKey: ['documents', documentId],
+    queryFn: async (): Promise<{ items: DocumentItem[] }> => {
+      const response = await fetch(`/api/documents/${documentId}`, { credentials: 'include' });
+      if (!response.ok) throw new Error('This Sales Order could not be loaded.');
+      return response.json();
+    },
+  });
+
+  if (detail.isLoading) return <SkeletonBlock className="mt-3 h-16 w-full" />;
+  if (detail.isError) return <QueryError message="This Sales Order could not be loaded." />;
+  const items = detail.data?.items ?? [];
+  if (!items.length) return <p className="mt-3 text-xs text-muted-foreground">This Sales Order has no line items.</p>;
+
+  return <div className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted/20 p-3">
+    <table className="w-full min-w-[520px] text-xs">
+      <thead><tr className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+        <th className="pb-2 pr-3 text-left font-medium">Product</th>
+        <th className="pb-2 px-2 text-right font-medium">Qty</th>
+        <th className="pb-2 px-2 text-left font-medium">Unit</th>
+        <th className="pb-2 px-2 text-right font-medium">Unit price</th>
+        <th className="pb-2 pl-2 text-right font-medium">Amount</th>
+      </tr></thead>
+      <tbody className="divide-y divide-border">{items.map((item) => <tr key={item.id}>
+        <td className="py-2 pr-3">{item.productModel && <span className="font-mono font-bold">{item.productModel} </span>}{item.productName}</td>
+        <td className="py-2 px-2 text-right font-mono">{item.quantity}</td>
+        <td className="py-2 px-2">{item.unit}</td>
+        <td className="py-2 px-2 text-right font-mono">{formatInr(Number(item.unitPrice))}</td>
+        <td className="py-2 pl-2 text-right font-mono font-semibold">{formatInr(Number(item.lineTotal))}</td>
+      </tr>)}</tbody>
+    </table>
+  </div>;
 }

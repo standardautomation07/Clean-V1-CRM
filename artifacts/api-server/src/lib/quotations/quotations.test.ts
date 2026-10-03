@@ -84,5 +84,46 @@ describe("quotation PDF", () => {
     }
     // Missing company configuration is shown as a placeholder, never invented.
     assert.ok(text.includes("ROLLVENTO_GSTIN") || process.env.ROLLVENTO_GSTIN);
+
+    // A quotation with no labels must still say QUOTATION: the Sales Order
+    // work parameterised this wording, and the default has to be unchanged.
+    assert.ok(text.includes("QUOTATION"), "a quotation must still be titled QUOTATION");
+    assert.ok(text.includes("VALID UNTIL"), "a quotation must still show its validity");
+  });
+
+  it("renders a Sales Order through the same layout with its own wording", async () => {
+    const pdf = await renderQuotationPdf({
+      quotationNumber: "RV-SO-0003",
+      status: "Approved",
+      createdAt: new Date("2026-10-02T10:00:00Z"),
+      validUntil: null,
+      currency: "INR",
+      subtotal: 10000,
+      discount: 0,
+      taxRate: 18,
+      taxAmount: 1800,
+      total: 11800,
+      terms: "",
+      notes: "",
+      items: [{ productModel: "SL1000AC", productName: "Sliding Gate Motor", quantity: 1, unit: "Nos", unitPrice: 10000, discount: 0, lineTotal: 10000 }],
+      customer: { companyName: "Lakshmi Engineering", contactName: "Suresh", phone: "+91 73569 44666", email: "", location: null, gstin: "32AAACR1234R1ZX" },
+      labels: {
+        title: "SALES ORDER",
+        numberLabel: "SALES ORDER NO.",
+        forLabel: "SALES ORDER FOR",
+        thirdColumnLabel: "AGAINST QUOTATION",
+        thirdColumnValue: "RV-2026-0007",
+        footerNote: "Raised against quotation RV-2026-0007.",
+      },
+    }, { compress: false });
+
+    const raw = pdf.toString("latin1");
+    const text = Array.from(raw.matchAll(/\[([^\]]*)\]\s*TJ/g), (m) => Array.from(m[1].matchAll(/<([0-9a-fA-F]+)>/g), (h) => Buffer.from(h[1], "hex").toString("latin1")).join("")).join("\n");
+    for (const expected of ["SALES ORDER", "RV-SO-0003", "AGAINST QUOTATION", "RV-2026-0007", "Lakshmi Engineering", "INR 11,800.00"]) {
+      assert.ok(text.includes(expected), `Sales Order PDF should contain "${expected}"`);
+    }
+    // The buyer's GSTIN belongs on the document it is raised against.
+    assert.ok(text.includes("32AAACR1234R1ZX"), "the buyer GSTIN should be printed");
+    assert.ok(!text.includes("VALID UNTIL"), "a Sales Order has no validity date");
   });
 });

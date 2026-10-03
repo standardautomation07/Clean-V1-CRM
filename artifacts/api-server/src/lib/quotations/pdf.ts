@@ -46,6 +46,17 @@ export interface PdfQuotation {
   notes: string;
   items: PdfQuotationItem[];
   customer: { companyName: string; contactName: string; phone: string; email: string; location: string | null; gstin?: string };
+  labels?: DocumentLabels;
+}
+
+/** Wording that differs between document types sharing this layout. */
+export interface DocumentLabels {
+  title: string;
+  numberLabel: string;
+  forLabel: string;
+  thirdColumnLabel: string;
+  thirdColumnValue: string;
+  footerNote: string;
 }
 
 const ACCENT = "#e8683a";
@@ -69,7 +80,7 @@ export interface RenderOptions {
 /** Renders the saved quotation to a PDF buffer. Totals are printed exactly as stored; nothing is recomputed here. */
 export function renderQuotationPdf(quotation: PdfQuotation, options: RenderOptions = {}): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const doc = new PDFDocument({ size: "A4", margin: 48, bufferPages: true, compress: options.compress ?? true, info: { Title: `Quotation ${quotation.quotationNumber}`, Author: companyDetails().legalName } });
+    const doc = new PDFDocument({ size: "A4", margin: 48, bufferPages: true, compress: options.compress ?? true, info: { Title: `${quotation.labels?.title ?? "Quotation"} ${quotation.quotationNumber}`, Author: companyDetails().legalName } });
     const chunks: Buffer[] = [];
     doc.on("data", (chunk: Buffer) => chunks.push(chunk));
     doc.on("end", () => resolve(Buffer.concat(chunks)));
@@ -85,7 +96,15 @@ export function renderQuotationPdf(quotation: PdfQuotation, options: RenderOptio
     doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(22).text("ROLLVENTO", left, 30);
     doc.font("Helvetica").fontSize(9).fillColor("#c9d1d6").text(company.legalName, left, 56);
     if (company.tagline) doc.text(company.tagline, left, 68);
-    doc.font("Helvetica-Bold").fontSize(20).fillColor(ACCENT).text("QUOTATION", left, 34, { width, align: "right" });
+    const labels: DocumentLabels = quotation.labels ?? {
+      title: "QUOTATION",
+      numberLabel: "QUOTATION NO.",
+      forLabel: "QUOTATION FOR",
+      thirdColumnLabel: "VALID UNTIL",
+      thirdColumnValue: quotation.validUntil ? formatDate(quotation.validUntil) : "To be confirmed",
+      footerNote: `This quotation is valid until ${quotation.validUntil ? formatDate(quotation.validUntil) : "the date confirmed by Rollvento"}.`,
+    };
+    doc.font("Helvetica-Bold").fontSize(20).fillColor(ACCENT).text(labels.title, left, 34, { width, align: "right" });
     doc.font("Helvetica").fontSize(9).fillColor("#ffffff").text(quotation.quotationNumber, left, 60, { width, align: "right" });
 
     // Meta block
@@ -93,17 +112,17 @@ export function renderQuotationPdf(quotation: PdfQuotation, options: RenderOptio
     const metaCols = [left, left + 130, left + 270, left + 410];
     const metaW = (i: number) => (i < 3 ? metaCols[i + 1] - metaCols[i] - 8 : right - metaCols[i]);
     doc.fillColor(MUTED).font("Helvetica").fontSize(8);
-    ["QUOTATION NO.", "DATE", "VALID UNTIL", "STATUS"].forEach((label, i) => doc.text(label, metaCols[i], y, { width: metaW(i), lineBreak: false }));
+    [labels.numberLabel, "DATE", labels.thirdColumnLabel, "STATUS"].forEach((label, i) => doc.text(label, metaCols[i], y, { width: metaW(i), lineBreak: false }));
     y += 11;
     doc.fillColor(INK).font("Helvetica-Bold").fontSize(10);
-    [quotation.quotationNumber, formatDate(quotation.createdAt), quotation.validUntil ? formatDate(quotation.validUntil) : "To be confirmed", quotation.status].forEach((value, i) => doc.text(value, metaCols[i], y, { width: metaW(i), lineBreak: false }));
+    [quotation.quotationNumber, formatDate(quotation.createdAt), labels.thirdColumnValue, quotation.status].forEach((value, i) => doc.text(value, metaCols[i], y, { width: metaW(i), lineBreak: false }));
     y += 26;
     doc.moveTo(left, y).lineTo(right, y).strokeColor(RULE).lineWidth(1).stroke();
     y += 14;
 
     // Parties
     const col = width / 2 - 10;
-    doc.fillColor(MUTED).font("Helvetica").fontSize(8).text("QUOTATION FOR", left, y).text("FROM", left + col + 20, y);
+    doc.fillColor(MUTED).font("Helvetica").fontSize(8).text(labels.forLabel, left, y).text("FROM", left + col + 20, y);
     y += 11;
     const customerLines = [
       quotation.customer.companyName,
@@ -201,7 +220,7 @@ export function renderQuotationPdf(quotation: PdfQuotation, options: RenderOptio
       doc.page.margins.bottom = 0;
       const fy = doc.page.height - 36;
       doc.moveTo(left, fy - 8).lineTo(right, fy - 8).strokeColor(RULE).lineWidth(0.5).stroke();
-      doc.fillColor(MUTED).font("Helvetica").fontSize(7.5).text(`${company.legalName}  ·  ${company.website}  ·  This quotation is valid until ${quotation.validUntil ? formatDate(quotation.validUntil) : "the date confirmed by Rollvento"}.`, left, fy, { width: width - 60, lineBreak: false });
+      doc.fillColor(MUTED).font("Helvetica").fontSize(7.5).text(`${company.legalName}  ·  ${company.website}  ·  ${labels.footerNote}`, left, fy, { width: width - 60, lineBreak: false });
       doc.text(`Page ${i - range.start + 1} of ${range.count}`, right - 60, fy, { width: 60, align: "right", lineBreak: false });
     }
     doc.end();
