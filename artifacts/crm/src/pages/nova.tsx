@@ -68,6 +68,7 @@ export function NovaCommandCenter() {
   const [includeDirectories, setIncludeDirectories] = useState(false);
   const [source, setSource] = useState<"maps" | "web">("maps");
   const [mapsLocation, setMapsLocation] = useState("");
+  const [findEmails, setFindEmails] = useState(false);
   const [mapsWaiting, setMapsWaiting] = useState(0);
   const [queueing, setQueueing] = useState<{ done: number; total: number; failed: string[] } | null>(null);
   const [bulk, setBulk] = useState<{ done: number; total: number; failed: number } | null>(null);
@@ -148,7 +149,7 @@ export function NovaCommandCenter() {
     if (hunterIntent) {
       if (source === "maps") {
         tool = "hunter_maps_campaign";
-        input = { query: commandText, location: mapsLocation.trim() || undefined, maxPlaces: 120, includeDirectories };
+        input = { query: commandText, location: mapsLocation.trim() || undefined, maxPlaces: 120, includeDirectories, scrapeContacts: findEmails };
       } else {
         tool = "hunter_run_campaign";
         input = { brief: commandText, maxResults: 15, intent: searchIntent, includeDirectories };
@@ -438,6 +439,12 @@ export function NovaCommandCenter() {
               : "border-border text-muted-foreground hover:bg-muted/40"}`}
           >{label}</button>
         ))}
+        {source === "maps" && (
+          <label className="flex items-center gap-1.5 text-muted-foreground">
+            <input type="checkbox" checked={findEmails} onChange={(e) => setFindEmails(e.target.checked)} />
+            Also find email addresses (visits each website, costs more)
+          </label>
+        )}
         {source === "maps" && (
           <input
             value={mapsLocation}
