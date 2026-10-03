@@ -4,6 +4,7 @@ import { ArrowLeft, Bot, CheckCircle2, Clock3, ExternalLink, FileText, MessageCi
 import { AppShell, PageHeading, SkeletonBlock } from "@/components/crm-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { partitionApprovals } from "@/lib/approval-risk";
 
 type Tool = { name: string; description: string; risk: string; requiresApproval: boolean };
 type Approval = { id: number; toolName: string; risk: string; status: string; input: unknown; requestedAt: string };
@@ -69,6 +70,8 @@ export function NovaCommandCenter() {
   const [mapsLocation, setMapsLocation] = useState("");
   const [mapsWaiting, setMapsWaiting] = useState(0);
   const [queueing, setQueueing] = useState<{ done: number; total: number; failed: string[] } | null>(null);
+  const [bulk, setBulk] = useState<{ done: number; total: number; failed: number } | null>(null);
+  const [confirmBulk, setConfirmBulk] = useState(false);
   const [result, setResult] = useState<unknown>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [running, setRunning] = useState(false);
@@ -376,6 +379,31 @@ export function NovaCommandCenter() {
     await loadApprovals();
   }
 
+  const { bulk: bulkApprovable, individual: individualOnly } = partitionApprovals(approvals);
+
+  async function approveAll() {
+    if (!bulkApprovable.length) return;
+    setRunning(true);
+    setBulk({ done: 0, total: bulkApprovable.length, failed: 0 });
+    let failed = 0;
+    try {
+      // Sequential, matching the single-approval path: each one executes a
+      // tool, and the duplicate check must see the leads already created.
+      for (const [index, approval] of bulkApprovable.entries()) {
+        const response = await fetch(`/api/nova/approvals/${approval.id}/approve`, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (!response.ok) failed += 1;
+        setBulk({ done: index + 1, total: bulkApprovable.length, failed });
+      }
+      await loadApprovals();
+    } finally {
+      setRunning(false);
+    }
+  }
+
   const campaign = isCampaignResult(result) ? result.data.candidates ?? [] : [];
   const productMatches = isProductSearchResult(result) ? result.data : null;
   // Duplicates and contactless places can never be imported, so they are not
@@ -637,11 +665,35 @@ export function NovaCommandCenter() {
     </section>
 
     {approvals.length > 0 && <section className="mt-6 rounded-2xl border border-amber-500/30 bg-card p-5 md:p-7">
-      <div className="mb-4 flex items-center gap-2"><ShieldCheck className="size-5 text-amber-600" /><h2 className="font-display text-lg font-bold">Pending approvals</h2><span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold">{approvals.length}</span></div>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2"><ShieldCheck className="size-5 text-amber-600" /><h2 className="font-display text-lg font-bold">Pending approvals</h2><span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold">{approvals.length}</span></div>
+        {bulkApprovable.length > 1 && (
+          confirmBulk
+            ? <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold">Approve and run {bulkApprovable.length} requests?</span>
+                <Button size="sm" disabled={running} onClick={() => { setConfirmBulk(false); approveAll(); }} data-testid="button-confirm-approve-all"><CheckCircle2 className="size-4" />Yes, approve all</Button>
+                <Button size="sm" variant="outline" disabled={running} onClick={() => setConfirmBulk(false)}>Cancel</Button>
+              </div>
+            : <Button size="sm" disabled={running} onClick={() => setConfirmBulk(true)} data-testid="button-approve-all"><CheckCircle2 className="size-4" />Approve all {bulkApprovable.length}</Button>
+        )}
+      </div>
+      {individualOnly.length > 0 && (
+        <p className="mb-3 rounded-lg bg-amber-500/10 p-2.5 text-[11px] leading-relaxed text-amber-900 dark:text-amber-200">
+          {individualOnly.length} request{individualOnly.length === 1 ? "" : "s"} below {individualOnly.length === 1 ? "contacts someone or commits money" : "contact someone or commit money"},
+          so {individualOnly.length === 1 ? "it is" : "they are"} left out of “Approve all” and {individualOnly.length === 1 ? "has" : "have"} to be approved individually.
+        </p>
+      )}
+      {bulk && (
+        <div className="mb-3 rounded-lg border border-border bg-muted/30 p-3 text-xs">
+          {bulk.done < bulk.total
+            ? <span className="font-semibold">Approving {bulk.done} of {bulk.total}…</span>
+            : <span className="font-semibold">{bulk.total - bulk.failed} of {bulk.total} approved and run{bulk.failed ? `, ${bulk.failed} failed` : ""}.</span>}
+        </div>
+      )}
       <div className="space-y-3">
         {approvals.map((approval) => <div key={approval.id} className="rounded-xl border border-border p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div><div className="font-mono text-xs font-semibold">{approval.toolName}</div><div className="mt-1 text-[11px] text-muted-foreground">Risk: {approval.risk} · Request #{approval.id}</div></div>
+            <div><div className="font-mono text-xs font-semibold">{approval.toolName}</div><div className="mt-1 text-[11px] text-muted-foreground">Risk: {approval.risk} · Request #{approval.id}{(approval.risk === "external" || approval.risk === "financial") ? " · individual approval only" : ""}</div></div>
             <div className="flex gap-2"><Button size="sm" onClick={() => decide(approval.id, "approve")}><CheckCircle2 className="size-4" />Approve & run</Button><Button size="sm" variant="outline" onClick={() => decide(approval.id, "reject")}><XCircle className="size-4" />Reject</Button></div>
           </div>
           <pre className="mt-3 max-h-32 overflow-auto rounded-lg bg-muted/50 p-3 text-[10px]">{JSON.stringify(approval.input, null, 2)}</pre>
