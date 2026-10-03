@@ -9,6 +9,7 @@ import { AppShell, SkeletonBlock } from '@/components/crm-ui';
 import { Customers, Dashboard, FollowUps, LeadDetail, Leads, Login, SettingsPage } from '@/pages/crm-pages';
 import { NewEnquiry } from '@/pages/enquiry';
 import { NovaCommandCenter } from '@/pages/nova';
+import { SalesOrders } from '@/pages/sales-orders';
 
 const queryClient = new QueryClient();
 
@@ -21,6 +22,7 @@ function Router() {
     <Route path="/nova" component={NovaCommandCenter} />
     <Route path="/leads" component={Leads} />
     <Route path="/leads/:id" component={LeadDetail} />
+    <Route path="/sales-orders" component={SalesOrders} />
     <Route path="/enquiry" component={NewEnquiry} />
     <Route path="/follow-ups" component={FollowUps} />
     <Route path="/customers" component={Customers} />

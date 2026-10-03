@@ -600,9 +600,35 @@ export const ListLeadQuotationsResponseItem = zod.object({
   "total": zod.number(),
   "validUntil": zod.string().regex(listLeadQuotationsResponseValidUntilRegExp).nullable().describe('Calendar date as YYYY-MM-DD, or null.'),
   "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
+  "updatedAt": zod.coerce.date(),
+  "companyName": zod.string().optional().describe('The lead\'s company name. Present when quotations are listed across leads, where the number alone does not identify the customer.')
 })
 export const ListLeadQuotationsResponse = zod.array(ListLeadQuotationsResponseItem)
+
+
+/**
+ * @summary List quotations across all leads
+ */
+export const ListQuotationsQueryParams = zod.object({
+  "status": zod.enum(['Draft', 'Generated']).optional().describe('Return only quotations in this state.')
+})
+
+export const listQuotationsResponseValidUntilRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+
+
+export const ListQuotationsResponseItem = zod.object({
+  "id": zod.number().int(),
+  "leadId": zod.number().int(),
+  "quotationNumber": zod.string(),
+  "status": zod.enum(['Draft', 'Generated']),
+  "currency": zod.string(),
+  "total": zod.number(),
+  "validUntil": zod.string().regex(listQuotationsResponseValidUntilRegExp).nullable().describe('Calendar date as YYYY-MM-DD, or null.'),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "companyName": zod.string().optional().describe('The lead\'s company name. Present when quotations are listed across leads, where the number alone does not identify the customer.')
+})
+export const ListQuotationsResponse = zod.array(ListQuotationsResponseItem)
 
 
 /**
