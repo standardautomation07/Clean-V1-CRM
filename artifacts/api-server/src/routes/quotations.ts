@@ -8,6 +8,8 @@ import {
   GetQuotationResponse,
   ListLeadQuotationsParams,
   ListLeadQuotationsResponse,
+  ListQuotationsQueryParams,
+  ListQuotationsResponse,
   UpdateQuotationBody,
   UpdateQuotationParams,
   UpdateQuotationResponse,
@@ -133,6 +135,28 @@ router.get("/leads/:id/quotations", async (req, res): Promise<void> => {
   }
   const rows = await db.select().from(quotationsTable).where(and(eq(quotationsTable.leadId, lead.id), eq(quotationsTable.ownerId, ownerId))).orderBy(desc(quotationsTable.createdAt));
   res.json(ListLeadQuotationsResponse.parse(rows.map(serializeSummary)));
+});
+
+// Quotations across every lead, for choosing one without first knowing which
+// lead it belongs to. The company name is joined in because a quotation number
+// on its own does not tell you whose quotation it is.
+router.get("/quotations", async (req, res): Promise<void> => {
+  const ownerId = requireUser(req, res);
+  if (!ownerId) return;
+  const query = ListQuotationsQueryParams.safeParse(req.query);
+  if (!query.success) {
+    res.status(400).json({ error: query.error.message });
+    return;
+  }
+  const filters = [eq(quotationsTable.ownerId, ownerId)];
+  if (query.data.status) filters.push(eq(quotationsTable.status, query.data.status));
+  const rows = await db
+    .select({ quotation: quotationsTable, companyName: leadsTable.companyName })
+    .from(quotationsTable)
+    .innerJoin(leadsTable, eq(leadsTable.id, quotationsTable.leadId))
+    .where(and(...filters))
+    .orderBy(desc(quotationsTable.createdAt));
+  res.json(ListQuotationsResponse.parse(rows.map((row) => ({ ...serializeSummary(row.quotation), companyName: row.companyName }))));
 });
 
 router.post("/quotations", async (req, res): Promise<void> => {

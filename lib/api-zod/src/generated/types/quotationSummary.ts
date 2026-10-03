@@ -18,4 +18,6 @@ export interface QuotationSummary {
   validUntil: CalendarDateOrNull | null;
   createdAt: Date;
   updatedAt: Date;
+  /** The lead's company name. Present when quotations are listed across leads, where the number alone does not identify the customer. */
+  companyName?: string;
 }

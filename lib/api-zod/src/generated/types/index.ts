@@ -36,6 +36,7 @@ export * from './leadUpdate';
 export * from './listLeadsParams';
 export * from './listLeadsSort';
 export * from './listProductsParams';
+export * from './listQuotationsParams';
 export * from './logoutBrowserSessionParams';
 export * from './logoutSuccess';
 export * from './mobileTokenExchangeRequest';

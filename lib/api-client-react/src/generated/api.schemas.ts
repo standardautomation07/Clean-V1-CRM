@@ -461,6 +461,8 @@ export interface QuotationSummary {
   validUntil: CalendarDateOrNull | null;
   createdAt: string;
   updatedAt: string;
+  /** The lead's company name. Present when quotations are listed across leads, where the number alone does not identify the customer. */
+  companyName?: string;
 }
 
 export interface Quotation {
@@ -522,5 +524,12 @@ export const ListLeadsSort = {
 export type ListProductsParams = {
 search?: string;
 category?: ProductCategory;
+};
+
+export type ListQuotationsParams = {
+/**
+ * Return only quotations in this state.
+ */
+status?: QuotationStatus;
 };
 

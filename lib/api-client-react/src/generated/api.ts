@@ -37,6 +37,7 @@ import type {
   LeadUpdate,
   ListLeadsParams,
   ListProductsParams,
+  ListQuotationsParams,
   LogoutBrowserSessionParams,
   LogoutSuccess,
   MobileTokenExchangeRequest,
@@ -1699,6 +1700,90 @@ export function useListLeadQuotations<TData = Awaited<ReturnType<typeof listLead
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListLeadQuotationsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListQuotationsUrl = (params?: ListQuotationsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/quotations?${stringifiedParams}` : `/api/quotations`
+}
+
+/**
+ * @summary List quotations across all leads
+ */
+export const listQuotations = async (params?: ListQuotationsParams, options?: Parameters<typeof customFetch>[1]): Promise<QuotationSummary[]> => {
+
+  return customFetch<QuotationSummary[]>(getListQuotationsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListQuotationsQueryKey = (params?: ListQuotationsParams,) => {
+    return [
+    `/api/quotations`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListQuotationsQueryOptions = <TData = Awaited<ReturnType<typeof listQuotations>>, TError = ErrorType<unknown>>(params?: ListQuotationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listQuotations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListQuotationsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listQuotations>>> = ({ signal }) => listQuotations(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listQuotations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListQuotationsQueryResult = NonNullable<Awaited<ReturnType<typeof listQuotations>>>
+export type ListQuotationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List quotations across all leads
+ */
+
+export function useListQuotations<TData = Awaited<ReturnType<typeof listQuotations>>, TError = ErrorType<unknown>>(
+ params?: ListQuotationsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listQuotations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListQuotationsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
