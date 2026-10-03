@@ -11,6 +11,7 @@ import { Download, ExternalLink, FileText, ShieldCheck } from 'lucide-react';
 import { AppShell, EmptyState, PageHeading, QueryError, SectionLabel, SkeletonBlock } from '@/components/crm-ui';
 import { Button } from '@/components/ui/button';
 import { formatInr } from '@/lib/quotation-math';
+import { SalesOrderEditor } from '@/components/sales-order-editor';
 
 // Sales Orders start from a generated quotation, so this page is a picker over
 // every generated quotation rather than a form. Creating the order goes through
@@ -175,7 +176,7 @@ export function SalesOrders() {
                           onClick={() => setOpenId(openId === doc.id ? null : doc.id)}
                           data-testid={`button-open-sales-order-${doc.id}`}
                           className="text-xs font-semibold text-primary hover:underline"
-                        >{openId === doc.id ? 'Hide' : 'Open'}</button>
+                        >{openId === doc.id ? 'Close' : 'Edit'}</button>
                         <a
                           href={`/api/documents/${doc.id}/pdf`}
                           target="_blank"
@@ -191,7 +192,11 @@ export function SalesOrders() {
                         ><Download className="size-3.5" />Save</a>
                       </div>
                     </div>
-                    {openId === doc.id && <SalesOrderDetail documentId={doc.id} />}
+                    {openId === doc.id && <SalesOrderEditor
+                      documentId={doc.id}
+                      documentNumber={doc.documentNumber}
+                      onSaved={() => { void queryClient.invalidateQueries({ queryKey: ['documents', 'SalesOrder'] }); }}
+                    />}
                   </div>
                 ))}
               </div>}
@@ -199,47 +204,3 @@ export function SalesOrders() {
   </AppShell>;
 }
 
-interface DocumentItem {
-  id: number;
-  productModel: string;
-  productName: string;
-  quantity: number | string;
-  unit: string;
-  unitPrice: number | string;
-  lineTotal: number | string;
-}
-
-function SalesOrderDetail({ documentId }: { documentId: number }) {
-  const detail = useQuery({
-    queryKey: ['documents', documentId],
-    queryFn: async (): Promise<{ items: DocumentItem[] }> => {
-      const response = await fetch(`/api/documents/${documentId}`, { credentials: 'include' });
-      if (!response.ok) throw new Error('This Sales Order could not be loaded.');
-      return response.json();
-    },
-  });
-
-  if (detail.isLoading) return <SkeletonBlock className="mt-3 h-16 w-full" />;
-  if (detail.isError) return <QueryError message="This Sales Order could not be loaded." />;
-  const items = detail.data?.items ?? [];
-  if (!items.length) return <p className="mt-3 text-xs text-muted-foreground">This Sales Order has no line items.</p>;
-
-  return <div className="mt-3 overflow-x-auto rounded-lg border border-border bg-muted/20 p-3">
-    <table className="w-full min-w-[520px] text-xs">
-      <thead><tr className="font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
-        <th className="pb-2 pr-3 text-left font-medium">Product</th>
-        <th className="pb-2 px-2 text-right font-medium">Qty</th>
-        <th className="pb-2 px-2 text-left font-medium">Unit</th>
-        <th className="pb-2 px-2 text-right font-medium">Unit price</th>
-        <th className="pb-2 pl-2 text-right font-medium">Amount</th>
-      </tr></thead>
-      <tbody className="divide-y divide-border">{items.map((item) => <tr key={item.id}>
-        <td className="py-2 pr-3">{item.productModel && <span className="font-mono font-bold">{item.productModel} </span>}{item.productName}</td>
-        <td className="py-2 px-2 text-right font-mono">{item.quantity}</td>
-        <td className="py-2 px-2">{item.unit}</td>
-        <td className="py-2 px-2 text-right font-mono">{formatInr(Number(item.unitPrice))}</td>
-        <td className="py-2 pl-2 text-right font-mono font-semibold">{formatInr(Number(item.lineTotal))}</td>
-      </tr>)}</tbody>
-    </table>
-  </div>;
-}
