@@ -9,12 +9,18 @@ import { AppShell, SkeletonBlock } from '@/components/crm-ui';
 import { Customers, Dashboard, FollowUps, LeadDetail, Leads, Login, SettingsPage } from '@/pages/crm-pages';
 import { NewEnquiry } from '@/pages/enquiry';
 import { NovaCommandCenter } from '@/pages/nova';
+import { PrivacyPolicy } from '@/pages/privacy';
 import { SalesOrders } from '@/pages/sales-orders';
 
 const queryClient = new QueryClient();
 
 function Router() {
   const { isLoading, isAuthenticated } = useAuth();
+  const [path] = useLocation();
+  // The privacy policy is served ahead of the authentication check, because
+  // Meta requires a publicly reachable policy URL and a policy nobody can open
+  // is not a policy. It reads nothing and exposes no customer data.
+  if (path === '/privacy') return <PrivacyPolicy />;
   if (isLoading) return <AppShell><div className="space-y-5"><SkeletonBlock className="h-5 w-24" /><SkeletonBlock className="h-12 w-80" /><div className="grid grid-cols-2 gap-4 md:grid-cols-5">{[1, 2, 3, 4, 5].map((item) => <SkeletonBlock key={item} className="h-32" />)}</div></div></AppShell>;
   if (!isAuthenticated) return <Login />;
   return <RoutedErrorBoundary><Switch>
