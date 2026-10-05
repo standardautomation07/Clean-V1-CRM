@@ -5,10 +5,10 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { ActivityInputType } from './activityInputType';
+import type { ActivityType } from './activityType';
 
 export interface ActivityInput {
-  type: ActivityInputType;
+  type: ActivityType;
   /** @minLength 1 */
   description: string;
 }

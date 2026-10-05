@@ -674,17 +674,30 @@ components:
         leadId: { type: integer }
         type:
           type: string
-          enum: [Note, StatusChange, FollowUpScheduled, LeadCreated, Quotation]
+          description: >-
+            What happened, as a short label. Deliberately not an enum: the
+            server writes these, and new kinds of activity are added as the
+            system grows. An enum here only means that a lead carrying a newer
+            label fails response validation and the whole lead page breaks,
+            which is exactly what happened with WhatsApp activities. The
+            allowed values a client may create are constrained on ActivityInput
+            instead, where the value does come from outside.
+          maxLength: 32
         description: { type: string }
         createdAt: { type: string, format: date-time }
         createdBy: { type: string }
+    ActivityType:
+      type: string
+      description: >-
+        The kinds of activity a client may create. The server writes other
+        labels of its own, such as WhatsApp or SalesOrderCreated, which is why
+        Activity.type is a plain string rather than this enum.
+      enum: [Note, StatusChange, FollowUpScheduled, LeadCreated, Quotation]
     ActivityInput:
       type: object
       required: [type, description]
       properties:
-        type:
-          type: string
-          enum: [Note, StatusChange, FollowUpScheduled, LeadCreated, Quotation]
+        type: { $ref: "#/components/schemas/ActivityType" }
         description: { type: string, minLength: 1 }
     FollowUp:
       type: object

@@ -8,7 +8,6 @@
 
 export * from './activity';
 export * from './activityInput';
-export * from './activityInputType';
 export * from './activityType';
 export * from './authorizationSessionHeaderParameter';
 export * from './authUser';

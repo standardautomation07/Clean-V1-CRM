@@ -244,6 +244,8 @@ export const GetLeadParams = zod.object({
 export const getLeadResponseLeadGstinMax = 20;
 
 export const getLeadResponseLeadNextFollowUpRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const getLeadResponseActivitiesItemTypeMax = 32;
+
 
 
 export const GetLeadResponse = zod.object({
@@ -267,7 +269,7 @@ export const GetLeadResponse = zod.object({
   "activities": zod.array(zod.object({
   "id": zod.number().int(),
   "leadId": zod.number().int(),
-  "type": zod.enum(['Note', 'StatusChange', 'FollowUpScheduled', 'LeadCreated', 'Quotation']),
+  "type": zod.string().max(getLeadResponseActivitiesItemTypeMax).describe('What happened, as a short label. Deliberately not an enum: the server writes these, and new kinds of activity are added as the system grows. An enum here only means that a lead carrying a newer label fails response validation and the whole lead page breaks, which is exactly what happened with WhatsApp activities. The allowed values a client may create are constrained on ActivityInput instead, where the value does come from outside.'),
   "description": zod.string(),
   "createdAt": zod.coerce.date(),
   "createdBy": zod.string()
@@ -349,10 +351,14 @@ export const ListLeadActivitiesParams = zod.object({
   "id": zod.coerce.number().int()
 })
 
+export const listLeadActivitiesResponseTypeMax = 32;
+
+
+
 export const ListLeadActivitiesResponseItem = zod.object({
   "id": zod.number().int(),
   "leadId": zod.number().int(),
-  "type": zod.enum(['Note', 'StatusChange', 'FollowUpScheduled', 'LeadCreated', 'Quotation']),
+  "type": zod.string().max(listLeadActivitiesResponseTypeMax).describe('What happened, as a short label. Deliberately not an enum: the server writes these, and new kinds of activity are added as the system grows. An enum here only means that a lead carrying a newer label fails response validation and the whole lead page breaks, which is exactly what happened with WhatsApp activities. The allowed values a client may create are constrained on ActivityInput instead, where the value does come from outside.'),
   "description": zod.string(),
   "createdAt": zod.coerce.date(),
   "createdBy": zod.string()
@@ -371,14 +377,18 @@ export const CreateLeadActivityParams = zod.object({
 
 
 export const CreateLeadActivityBody = zod.object({
-  "type": zod.enum(['Note', 'StatusChange', 'FollowUpScheduled', 'LeadCreated', 'Quotation']),
+  "type": zod.enum(['Note', 'StatusChange', 'FollowUpScheduled', 'LeadCreated', 'Quotation']).describe('The kinds of activity a client may create. The server writes other labels of its own, such as WhatsApp or SalesOrderCreated, which is why Activity.type is a plain string rather than this enum.'),
   "description": zod.string().min(1)
 })
+
+export const createLeadActivityResponseTypeMax = 32;
+
+
 
 export const CreateLeadActivityResponse = zod.object({
   "id": zod.number().int(),
   "leadId": zod.number().int(),
-  "type": zod.enum(['Note', 'StatusChange', 'FollowUpScheduled', 'LeadCreated', 'Quotation']),
+  "type": zod.string().max(createLeadActivityResponseTypeMax).describe('What happened, as a short label. Deliberately not an enum: the server writes these, and new kinds of activity are added as the system grows. An enum here only means that a lead carrying a newer label fails response validation and the whole lead page breaks, which is exactly what happened with WhatsApp activities. The allowed values a client may create are constrained on ActivityInput instead, where the value does come from outside.'),
   "description": zod.string(),
   "createdAt": zod.coerce.date(),
   "createdBy": zod.string()
