@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseProductEnquiry } from "./product-enquiry";
+import { mergeEnquiry, parseProductEnquiry } from "./product-enquiry";
 
 test("reads the message the website sends", () => {
   const e = parseProductEnquiry("Enquiry: SL1000AC\nQuantity: 10 sets");
@@ -74,4 +74,22 @@ test("a loosely written model still cannot match inside a longer code", () => {
 test("the larger shutter motor is not read as the smaller one", () => {
   assert.equal(parseProductEnquiry("RV-1500 qty 3").model, "RV-1500");
   assert.equal(parseProductEnquiry("RV 2000, 5 sets").model, "RV-2000");
+});
+
+test("merges the model and the tapped quantity into one enquiry", () => {
+  // The real conversation, newest first: the tap, then the original enquiry.
+  const merged = mergeEnquiry(["Quantity: 5 sets", "Enquiry: RV-400"]);
+  assert.equal(merged.model, "RV-400");
+  assert.equal(merged.quantity, 5);
+  assert.match(merged.requirement ?? "", /^RV-400 — /);
+  assert.match(merged.requirement ?? "", /Quantity: 5 sets$/);
+});
+
+test("merging keeps the most recent answer when a customer changes their mind", () => {
+  // Newest first, so a corrected quantity wins over the earlier one.
+  assert.equal(mergeEnquiry(["Quantity: 20 sets", "Quantity: 5 sets", "Enquiry: RV-600"]).quantity, 20);
+});
+
+test("merging an unrelated conversation yields nothing", () => {
+  assert.equal(mergeEnquiry(["Hello", "are you open today?"]).requirement, null);
 });

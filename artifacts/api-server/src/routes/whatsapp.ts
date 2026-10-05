@@ -1,7 +1,8 @@
 import { and, desc, eq, isNull, or } from "drizzle-orm";
 import { db, leadsTable, usersTable, whatsappMessagesTable, activitiesTable } from "@workspace/db";
 import { getNovaTool } from "../lib/nova/tools";
-import { parseProductEnquiry } from "../lib/whatsapp/product-enquiry";
+import { enquiryRequirement, mergeEnquiry, parseProductEnquiry } from "../lib/whatsapp/product-enquiry";
+import { getProductByModel } from "../lib/knowledge/products";
 import { acknowledgement, buildQuantityMenu, readQuantityReply } from "../lib/whatsapp/quantity-menu";
 
 /**
@@ -229,7 +230,23 @@ router.get("/whatsapp/inbox", async (req, res): Promise<void> => {
     .where(or(eq(whatsappMessagesTable.ownerId, req.user.id), isNull(whatsappMessagesTable.ownerId)))
     .orderBy(desc(whatsappMessagesTable.createdAt))
     .limit(100);
-  res.json({ messages: rows });
+
+  // What the enquiry amounts to, so the inbox can show it and let it be
+  // corrected before anything becomes a lead. The model and the quantity
+  // arrive as separate messages, so it is merged across the conversation with
+  // that number rather than read from one message.
+  const byPhone = new Map<string, ReturnType<typeof mergeEnquiry>>();
+  for (const row of rows) {
+    if (row.leadId || row.direction !== "Inbound" || byPhone.has(row.phone)) continue;
+    byPhone.set(row.phone, mergeEnquiry(rows.filter((r) => r.phone === row.phone && r.direction === "Inbound").map((r) => r.body)));
+  }
+
+  res.json({
+    messages: rows.map((row) => ({
+      ...row,
+      enquiry: row.leadId || row.direction !== "Inbound" ? null : byPhone.get(row.phone) ?? null,
+    })),
+  });
 });
 
 // Converting a held enquiry into a lead. This is the human step: the website
@@ -268,19 +285,22 @@ router.post("/whatsapp/messages/:id/convert-lead", async (req, res): Promise<voi
     .where(and(eq(whatsappMessagesTable.phone, message.phone), eq(whatsappMessagesTable.direction, "Inbound")))
     .orderBy(desc(whatsappMessagesTable.createdAt))
     .limit(10);
-  const enquiry = recent
-    .map((row) => parseProductEnquiry(row.body))
-    .reduce((merged, one) => ({
-      model: merged.model ?? one.model,
-      productName: merged.productName ?? one.productName,
-      quantity: merged.quantity ?? one.quantity,
-      unit: merged.unit ?? one.unit,
-      requirement: null,
-    }), parseProductEnquiry(message.body));
-  enquiry.requirement = [
-    enquiry.model ? (enquiry.productName ? `${enquiry.model} — ${enquiry.productName}` : enquiry.model) : "",
-    enquiry.quantity !== null ? `Quantity: ${enquiry.quantity}${enquiry.unit ? ` ${enquiry.unit}` : ""}` : "",
-  ].filter(Boolean).join(" · ") || null;
+  const parsed = mergeEnquiry([message.body, ...recent.map((row) => row.body)]);
+
+  // Whatever the person corrected in the inbox wins over what was parsed. A
+  // customer may have written the model loosely, or tapped the wrong quantity.
+  const edits = (req.body ?? {}) as { companyName?: string; contactName?: string; model?: string; quantity?: number | string; requirement?: string };
+  const model = String(edits.model ?? "").trim() || parsed.model;
+  const quantityInput = edits.quantity === undefined || edits.quantity === "" ? null : Number(edits.quantity);
+  const quantity = quantityInput !== null && Number.isFinite(quantityInput) && quantityInput > 0 ? Math.trunc(quantityInput) : parsed.quantity;
+  const enquiry = {
+    model,
+    productName: model === parsed.model ? parsed.productName : getProductByModel(model ?? "")?.productName ?? null,
+    quantity,
+    unit: parsed.unit ?? (quantity !== null ? "sets" : null),
+    requirement: "" as string | null,
+  };
+  enquiry.requirement = String(edits.requirement ?? "").trim() || enquiryRequirement(enquiry);
   const body = (req.body ?? {}) as { companyName?: string; contactName?: string };
   const name = String(body.companyName ?? "").trim() || profileName(message.payload, message.phone);
 

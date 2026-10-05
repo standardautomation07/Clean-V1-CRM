@@ -71,6 +71,33 @@ function findQuantity(text: string): { quantity: number; unit: string | null } |
   return { quantity, unit };
 }
 
+/** Builds the requirement line from whatever of the enquiry is known. */
+export function enquiryRequirement(enquiry: Omit<ProductEnquiry, "requirement">): string | null {
+  const parts: string[] = [];
+  if (enquiry.model) parts.push(enquiry.productName ? `${enquiry.model} — ${enquiry.productName}` : enquiry.model);
+  if (enquiry.quantity !== null) parts.push(`Quantity: ${enquiry.quantity}${enquiry.unit ? ` ${enquiry.unit}` : ""}`);
+  return parts.join(" · ") || null;
+}
+
+/**
+ * One enquiry from a whole conversation. The customer sends the model, then
+ * taps the quantity, so neither message carries the full picture on its own.
+ * Earlier messages win, because they are the most recent: the caller passes
+ * the conversation newest first.
+ */
+export function mergeEnquiry(bodies: string[]): ProductEnquiry {
+  const merged = bodies.map(parseProductEnquiry).reduce<Omit<ProductEnquiry, "requirement">>(
+    (acc, one) => ({
+      model: acc.model ?? one.model,
+      productName: acc.productName ?? one.productName,
+      quantity: acc.quantity ?? one.quantity,
+      unit: acc.unit ?? one.unit,
+    }),
+    { model: null, productName: null, quantity: null, unit: null },
+  );
+  return { ...merged, requirement: enquiryRequirement(merged) };
+}
+
 export function parseProductEnquiry(body: string): ProductEnquiry {
   const text = String(body ?? "").trim();
   const empty: ProductEnquiry = { model: null, productName: null, quantity: null, unit: null, requirement: null };
