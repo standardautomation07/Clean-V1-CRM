@@ -34,6 +34,7 @@ import { Field } from '@/components/sales-agent/fields';
 import { WorkflowStepper } from '@/components/sales-agent/stepper';
 import { ReviewStep } from '@/components/sales-agent/review-step';
 import { PricingStep, newLine, toNumericLines, type PricingFormState } from '@/components/sales-agent/pricing-step';
+import { lineFromRequirement } from '@/lib/requirement-line';
 import { QuotationStep } from '@/components/sales-agent/quotation-step';
 import { FollowUpStep } from '@/components/sales-agent/follow-up-step';
 import { ProductSpecGrid } from '@/components/sales-agent/product-card';
@@ -86,11 +87,19 @@ export function NewEnquiry() {
   const existingLead = useGetLead(leadIdParam, { query: { enabled: Number.isFinite(leadIdParam) && leadIdParam > 0 && !lead, queryKey: getGetLeadQueryKey(leadIdParam) } });
   useEffect(() => {
     if (existingLead.data?.lead && !lead) {
-      setLead(existingLead.data.lead);
-      setPricing((current) => ({ ...current, gstin: existingLead.data.lead.gstin ?? '' }));
+      const incoming = existingLead.data.lead;
+      setLead(incoming);
+      // Start the quotation from what the customer asked for, rather than
+      // making someone retype it from the requirement they just read.
+      const prefill = lineFromRequirement(incoming.requirement ?? '', catalogue.data ?? []);
+      setPricing((current) => ({
+        ...current,
+        gstin: incoming.gstin ?? '',
+        lines: current.lines.length ? current.lines : prefill ? [newLine(prefill)] : [],
+      }));
       setStep('pricing');
     }
-  }, [existingLead.data, lead]);
+  }, [existingLead.data, lead, catalogue.data]);
 
   function invalidateLead(id: number) {
     queryClient.invalidateQueries({ queryKey: getGetLeadQueryKey(id) });

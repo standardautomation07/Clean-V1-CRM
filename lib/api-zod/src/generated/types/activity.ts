@@ -5,12 +5,15 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import type { ActivityType } from './activityType';
 
 export interface Activity {
   id: number;
   leadId: number;
-  type: ActivityType;
+  /**
+     * What happened, as a short label. Deliberately not an enum: the server writes these, and new kinds of activity are added as the system grows. An enum here only means that a lead carrying a newer label fails response validation and the whole lead page breaks, which is exactly what happened with WhatsApp activities. The allowed values a client may create are constrained on ActivityInput instead, where the value does come from outside.
+     * @maxLength 32
+     */
+  type: string;
   description: string;
   createdAt: Date;
   createdBy: string;

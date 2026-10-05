@@ -114,21 +114,14 @@ export interface Lead {
   ownerId: string;
 }
 
-export type ActivityType = typeof ActivityType[keyof typeof ActivityType];
-
-
-export const ActivityType = {
-  Note: 'Note',
-  StatusChange: 'StatusChange',
-  FollowUpScheduled: 'FollowUpScheduled',
-  LeadCreated: 'LeadCreated',
-  Quotation: 'Quotation',
-} as const;
-
 export interface Activity {
   id: number;
   leadId: number;
-  type: ActivityType;
+  /**
+     * What happened, as a short label. Deliberately not an enum: the server writes these, and new kinds of activity are added as the system grows. An enum here only means that a lead carrying a newer label fails response validation and the whole lead page breaks, which is exactly what happened with WhatsApp activities. The allowed values a client may create are constrained on ActivityInput instead, where the value does come from outside.
+     * @maxLength 32
+     */
+  type: string;
   description: string;
   createdAt: string;
   createdBy: string;
@@ -191,10 +184,13 @@ export interface LeadUpdate {
   notes?: string;
 }
 
-export type ActivityInputType = typeof ActivityInputType[keyof typeof ActivityInputType];
+/**
+ * The kinds of activity a client may create. The server writes other labels of its own, such as WhatsApp or SalesOrderCreated, which is why Activity.type is a plain string rather than this enum.
+ */
+export type ActivityType = typeof ActivityType[keyof typeof ActivityType];
 
 
-export const ActivityInputType = {
+export const ActivityType = {
   Note: 'Note',
   StatusChange: 'StatusChange',
   FollowUpScheduled: 'FollowUpScheduled',
@@ -203,7 +199,7 @@ export const ActivityInputType = {
 } as const;
 
 export interface ActivityInput {
-  type: ActivityInputType;
+  type: ActivityType;
   /** @minLength 1 */
   description: string;
 }

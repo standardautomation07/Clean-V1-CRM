@@ -6,6 +6,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
+/**
+ * The kinds of activity a client may create. The server writes other labels of its own, such as WhatsApp or SalesOrderCreated, which is why Activity.type is a plain string rather than this enum.
+ */
 export type ActivityType = typeof ActivityType[keyof typeof ActivityType];
 
 
