@@ -89,17 +89,23 @@ export function NewEnquiry() {
     if (existingLead.data?.lead && !lead) {
       const incoming = existingLead.data.lead;
       setLead(incoming);
-      // Start the quotation from what the customer asked for, rather than
-      // making someone retype it from the requirement they just read.
-      const prefill = lineFromRequirement(incoming.requirement ?? '', catalogue.data ?? []);
-      setPricing((current) => ({
-        ...current,
-        gstin: incoming.gstin ?? '',
-        lines: current.lines.length ? current.lines : prefill ? [newLine(prefill)] : [],
-      }));
+      setPricing((current) => ({ ...current, gstin: incoming.gstin ?? '' }));
       setStep('pricing');
     }
-  }, [existingLead.data, lead, catalogue.data]);
+  }, [existingLead.data, lead]);
+
+  // Filling the first line is deliberately a separate effect. The lead and the
+  // product catalogue load independently, and the catalogue usually finishes
+  // last; doing this alongside setLead matched the requirement against an empty
+  // catalogue and silently filled nothing. This waits for both, and only ever
+  // fills an empty form, so it cannot overwrite anything already typed.
+  const [prefilled, setPrefilled] = useState(false);
+  useEffect(() => {
+    if (prefilled || !lead || !catalogue.data?.length || pricing.lines.length) return;
+    const line = lineFromRequirement(lead.requirement ?? '', catalogue.data);
+    setPrefilled(true);
+    if (line) setPricing((current) => (current.lines.length ? current : { ...current, lines: [newLine(line)] }));
+  }, [lead, catalogue.data, pricing.lines.length, prefilled]);
 
   function invalidateLead(id: number) {
     queryClient.invalidateQueries({ queryKey: getGetLeadQueryKey(id) });
