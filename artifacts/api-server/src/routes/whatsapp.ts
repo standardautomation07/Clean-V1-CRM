@@ -249,6 +249,47 @@ router.get("/whatsapp/inbox", async (req, res): Promise<void> => {
   });
 });
 
+// What this lead actually asked for, read from its WhatsApp conversation.
+//
+// The lead's requirement field is only a snapshot of the moment it was created.
+// A conversation continues: the customer names a model, taps a quantity, or
+// changes their mind, and none of that rewrites the requirement. Quoting from
+// the requirement alone therefore misses what the customer most recently said,
+// which is the thing being quoted.
+router.get("/leads/:id/whatsapp-enquiry", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid lead id" });
+    return;
+  }
+  const [lead] = await db.select().from(leadsTable).where(and(eq(leadsTable.id, id), eq(leadsTable.ownerId, req.user.id)));
+  if (!lead) {
+    res.status(404).json({ error: "Lead not found" });
+    return;
+  }
+
+  const messages = await db
+    .select({ body: whatsappMessagesTable.body })
+    .from(whatsappMessagesTable)
+    .where(and(eq(whatsappMessagesTable.leadId, id), eq(whatsappMessagesTable.direction, "Inbound")))
+    .orderBy(desc(whatsappMessagesTable.createdAt))
+    .limit(20);
+
+  // Newest first, so the most recent model and quantity win.
+  const fromMessages = mergeEnquiry(messages.map((m) => m.body));
+  // The requirement is the fallback, not the other way round: it may itself
+  // have been written from an enquiry when the lead was converted.
+  const enquiry = fromMessages.model || fromMessages.quantity !== null
+    ? fromMessages
+    : parseProductEnquiry(lead.requirement ?? "");
+
+  res.json({ leadId: id, enquiry, source: fromMessages.model || fromMessages.quantity !== null ? "messages" : "requirement" });
+});
+
 // Converting a held enquiry into a lead. This is the human step: the website
 // sends real traffic to this number, so a person decides what becomes a lead.
 router.post("/whatsapp/messages/:id/convert-lead", async (req, res): Promise<void> => {
