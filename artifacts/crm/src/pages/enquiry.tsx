@@ -102,9 +102,29 @@ export function NewEnquiry() {
   const [prefilled, setPrefilled] = useState(false);
   useEffect(() => {
     if (prefilled || !lead || !catalogue.data?.length || pricing.lines.length) return;
-    const line = lineFromRequirement(lead.requirement ?? '', catalogue.data);
     setPrefilled(true);
-    if (line) setPricing((current) => (current.lines.length ? current : { ...current, lines: [newLine(line)] }));
+    let cancelled = false;
+    const products = catalogue.data;
+    void (async () => {
+      // The WhatsApp conversation is the better source. A lead's requirement is
+      // only a snapshot of when the lead was created; the customer may have
+      // named the model or tapped a quantity afterwards, and that is what is
+      // being quoted. The requirement remains the fallback.
+      let text = lead.requirement ?? '';
+      try {
+        const response = await fetch('/api/leads/' + lead.id + '/whatsapp-enquiry', { credentials: 'include' });
+        if (response.ok) {
+          const data = await response.json();
+          if (data?.enquiry?.requirement) text = data.enquiry.requirement;
+        }
+      } catch {
+        // Fall back to the requirement: an empty first line is recoverable.
+      }
+      if (cancelled) return;
+      const line = lineFromRequirement(text, products);
+      if (line) setPricing((current) => (current.lines.length ? current : { ...current, lines: [newLine(line)] }));
+    })();
+    return () => { cancelled = true; };
   }, [lead, catalogue.data, pricing.lines.length, prefilled]);
 
   function invalidateLead(id: number) {

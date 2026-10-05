@@ -93,3 +93,18 @@ test("merging keeps the most recent answer when a customer changes their mind", 
 test("merging an unrelated conversation yields nothing", () => {
   assert.equal(mergeEnquiry(["Hello", "are you open today?"]).requirement, null);
 });
+
+test("reads the enquiry out of a real conversation on an existing lead", () => {
+  // Lead 1's actual inbound messages, newest first. The lead's own requirement
+  // field says only "I need rolling shutter motors for 600 kg", which names no
+  // model: the conversation is where the enquiry really is.
+  const merged = mergeEnquiry([
+    "Quantity: 10 sets",
+    "Hello Rollvento, I would like a quotation for the SL500DC.",
+    "Quantity: 2 sets",
+    "Hello Rollvento, I would like a quotation for the SL500DC.",
+  ]);
+  assert.equal(merged.model, "SL500DC");
+  assert.equal(merged.quantity, 10, "the most recent quantity should win");
+  assert.match(merged.requirement ?? "", /Quantity: 10 sets$/);
+});
