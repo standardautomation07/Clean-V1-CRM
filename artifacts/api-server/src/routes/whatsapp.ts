@@ -158,4 +158,73 @@ router.get("/whatsapp/inbox", async (req, res): Promise<void> => {
   res.json({ messages: rows });
 });
 
+// Why this exists: inbound webhooks were not arriving and every setting in
+// Meta's console looked correct. The console shows the app's webhook
+// subscription but never shows whether the WhatsApp Business Account is
+// subscribed to the app, which is a separate thing and the usual cause. Only
+// the Graph API can answer that, and the server already holds the token, so it
+// asks on our behalf rather than anyone pasting a credential anywhere.
+//
+// Read-only, and the token never appears in the response.
+
+const GRAPH = () => `https://graph.facebook.com/${process.env.WHATSAPP_GRAPH_VERSION?.trim() || "v23.0"}`;
+
+async function graph(path: string, init?: RequestInit) {
+  const token = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
+  if (!token) return { ok: false, error: "WHATSAPP_ACCESS_TOKEN is not configured" };
+  const response = await fetch(`${GRAPH()}/${path}`, {
+    ...init,
+    headers: { ...(init?.headers ?? {}), Authorization: `Bearer ${token}` },
+  });
+  const body = await response.json().catch(() => ({}));
+  return { ok: response.ok, status: response.status, body };
+}
+
+router.get("/whatsapp/diagnostics", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
+  const wabaId = String(req.query.wabaId ?? "").trim();
+
+  const report: Record<string, unknown> = {
+    configured: {
+      phoneNumberId: phoneNumberId ?? null,
+      hasAccessToken: Boolean(process.env.WHATSAPP_ACCESS_TOKEN?.trim()),
+      hasAppSecret: Boolean(process.env.WHATSAPP_APP_SECRET?.trim()),
+      hasVerifyToken: Boolean(process.env.WHATSAPP_VERIFY_TOKEN?.trim()),
+    },
+  };
+
+  // Does the token work, and which number does it actually point at?
+  if (phoneNumberId) {
+    report.phoneNumber = await graph(`${phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,platform_type,code_verification_status`);
+  }
+
+  // The answer we are actually after: is any app subscribed to this WABA?
+  if (wabaId) {
+    report.subscribedApps = await graph(`${wabaId}/subscribed_apps`);
+  } else {
+    report.subscribedApps = { skipped: "Pass ?wabaId=<id> to check which apps this WhatsApp Business Account delivers webhooks to." };
+  }
+
+  res.json(report);
+});
+
+// Subscribing is a write, so it is a POST and never happens by loading a page.
+router.post("/whatsapp/diagnostics/subscribe", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  const wabaId = String(req.query.wabaId ?? "").trim();
+  if (!wabaId) {
+    res.status(400).json({ error: "wabaId is required" });
+    return;
+  }
+  const result = await graph(`${wabaId}/subscribed_apps`, { method: "POST" });
+  res.status(result.ok ? 200 : 502).json(result);
+});
+
 export default router;
