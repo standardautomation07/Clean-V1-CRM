@@ -8,7 +8,8 @@ import { partitionApprovals } from "@/lib/approval-risk";
 
 type Tool = { name: string; description: string; risk: string; requiresApproval: boolean };
 type Approval = { id: number; toolName: string; risk: string; status: string; input: unknown; requestedAt: string };
-type WhatsappMessage = { id: number; leadId: number | null; direction: string; status: string; phone: string; messageType: string; body: string; createdAt: string };
+type ParsedEnquiry = { model: string | null; productName: string | null; quantity: number | null; unit: string | null; requirement: string | null };
+type WhatsappMessage = { id: number; leadId: number | null; direction: string; status: string; phone: string; messageType: string; body: string; createdAt: string; enquiry?: ParsedEnquiry | null };
 type Enrichment = { companyName: string; website?: string; location?: string; sources: Array<{ title: string; url: string; content: string; score: number | null }>; socialProfiles: string[]; contactEvidence: Array<{ title: string; url: string; content: string; score: number | null }>; servicesAndSignals: string[]; rollventoFit?: { category?: string | null; candidates?: Array<{ product?: { model?: string; productName?: string; category?: string }; score?: number; reason?: string }>; questions?: string[] } | null; };
 type Candidate = {
   companyName: string;
@@ -93,6 +94,7 @@ export function NovaCommandCenter() {
   const [selectedMessage, setSelectedMessage] = useState<WhatsappMessage | null>(null);
   const [replyDraft, setReplyDraft] = useState("");
   const [replyAction, setReplyAction] = useState("");
+  const [draft, setDraft] = useState({ companyName: "", contactName: "", model: "", quantity: "" });
 
 
   async function loadInbox() {
@@ -111,7 +113,7 @@ export function NovaCommandCenter() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify(draft),
       });
       const data = await response.json();
       setResult(data);
@@ -669,7 +671,7 @@ export function NovaCommandCenter() {
       </div>
       {inbox.length === 0 ? <p className="mt-4 rounded-xl bg-muted/40 p-4 text-xs text-muted-foreground">{inboxLoading ? "Loading messages…" : "No WhatsApp messages found."}</p> : <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div className="max-h-96 space-y-2 overflow-auto">
-          {inbox.map((message) => <button key={message.id} type="button" onClick={() => { setSelectedMessage(message); setReplyDraft(""); setReplyAction(""); }} className={`w-full rounded-xl border p-3 text-left ${selectedMessage?.id === message.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"}`}>
+          {inbox.map((message) => <button key={message.id} type="button" onClick={() => { setSelectedMessage(message); setReplyDraft(""); setReplyAction(""); setDraft({ companyName: "", contactName: "", model: message.enquiry?.model ?? "", quantity: message.enquiry?.quantity != null ? String(message.enquiry.quantity) : "" }); }} className={`w-full rounded-xl border p-3 text-left ${selectedMessage?.id === message.id ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"}`}>
             <div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold">{message.phone}</span><span className="text-[10px] text-muted-foreground">{message.direction} · {message.status}</span></div>
             <p className="mt-2 line-clamp-3 text-xs">{message.body || `[${message.messageType} message]`}</p><p className="mt-2 text-[10px] text-muted-foreground">{new Date(message.createdAt).toLocaleString()}</p>
           </button>)}
@@ -684,12 +686,29 @@ export function NovaCommandCenter() {
               <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
                 <p className="text-[11px] font-semibold text-amber-900 dark:text-amber-200">Enquiry — not yet a lead</p>
                 <p className="mt-1 text-[11px] leading-relaxed text-amber-900/90 dark:text-amber-200/90">
-                  This number is not in your CRM. Converting it creates the lead, carries the product and quantity into
-                  the requirement, and lets you reply and quote.
+                  Check what was read from the conversation and correct anything wrong. Converting creates the lead
+                  with these details, so the quotation starts from them.
                 </p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  <EnquiryField label="Company" value={draft.companyName} onChange={(v) => setDraft({ ...draft, companyName: v })} placeholder="Company or contact name" testId="input-enquiry-company" />
+                  <EnquiryField label="Contact person" value={draft.contactName} onChange={(v) => setDraft({ ...draft, contactName: v })} placeholder="Optional" testId="input-enquiry-contact" />
+                  <EnquiryField label="Model" value={draft.model} onChange={(v) => setDraft({ ...draft, model: v.toUpperCase() })} placeholder="e.g. RV-400" testId="input-enquiry-model" />
+                  <EnquiryField label="Quantity" value={draft.quantity} onChange={(v) => setDraft({ ...draft, quantity: v.replace(/[^0-9]/g, "") })} placeholder="e.g. 5" testId="input-enquiry-qty" />
+                </div>
                 <Button className="mt-2" size="sm" disabled={running} onClick={() => convertToLead(selectedMessage)} data-testid="button-convert-enquiry">
                   <Users className="size-3" />Convert to lead
                 </Button>
+              </div>
+            )}
+            {/* Once it is a lead, the next step is the quotation, so say so
+                rather than leaving the operator to find the leads page. */}
+            {selectedMessage.leadId && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/30 p-3">
+                <span className="text-[11px] font-semibold">Lead #{selectedMessage.leadId}</span>
+                <Link href={`/leads/${selectedMessage.leadId}`} className="text-[11px] font-semibold text-primary hover:underline" data-testid="link-open-lead">Open lead</Link>
+                <Link href={`/enquiry?leadId=${selectedMessage.leadId}`} className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-primary-foreground" data-testid="link-new-quotation">
+                  <FileText className="size-3" />Create quotation
+                </Link>
               </div>
             )}
             {selectedMessage.direction === "Inbound" && <Button className="mt-3" size="sm" variant="outline" disabled={running || !selectedMessage.leadId || !selectedMessage.body} onClick={() => interpretMessage(selectedMessage)}><Sparkles className="size-3" />Draft suggested reply</Button>}
@@ -748,4 +767,18 @@ export function NovaCommandCenter() {
       <section className="rounded-xl border border-border bg-card p-5"><div className="mb-5 flex items-center gap-2"><Bot className="size-4 text-primary" /><h2 className="font-display font-bold">Tool registry</h2></div>{loading ? <SkeletonBlock className="h-16 w-full" /> : <div className="space-y-2">{tools.map((tool) => <div key={tool.name} className="flex items-center justify-between rounded-lg bg-muted/45 px-3 py-2"><span className="font-mono text-[10px]">{tool.name}</span><span className="text-[10px] text-muted-foreground">{tool.requiresApproval ? "approval" : tool.risk}</span></div>)}</div>}</section>
     </div>
   </AppShell>;
+}
+
+/** A small labelled input for correcting an enquiry before it becomes a lead. */
+function EnquiryField({ label, value, onChange, placeholder, testId }: { label: string; value: string; onChange: (value: string) => void; placeholder?: string; testId: string }) {
+  return <label className="block text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-900/80 dark:text-amber-200/80">
+    {label}
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      data-testid={testId}
+      className="mt-1 w-full rounded border border-amber-500/40 bg-background px-2 py-1 text-xs font-normal normal-case tracking-normal text-foreground"
+    />
+  </label>;
 }
