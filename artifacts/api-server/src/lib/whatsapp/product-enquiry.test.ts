@@ -57,3 +57,21 @@ test("case and spacing do not matter", () => {
 test("a zero or absurd quantity is ignored", () => {
   assert.equal(parseProductEnquiry("SL600AC Quantity: 0").quantity, null);
 });
+
+test("a rolling shutter model is recognised however the customer writes it", () => {
+  // RV-400 is the model; customers type it loosely, and these are exactly the
+  // products the website funnels enquiries for.
+  for (const written of ["Enquiry: RV-400", "enquiry: rv 400", "I want RV400", "rv-400 please"]) {
+    assert.equal(parseProductEnquiry(written).model, "RV-400", `failed on: ${written}`);
+  }
+});
+
+test("a loosely written model still cannot match inside a longer code", () => {
+  assert.equal(parseProductEnquiry("ref RV4001").model, null);
+  assert.equal(parseProductEnquiry("ref XRV400").model, null);
+});
+
+test("the larger shutter motor is not read as the smaller one", () => {
+  assert.equal(parseProductEnquiry("RV-1500 qty 3").model, "RV-1500");
+  assert.equal(parseProductEnquiry("RV 2000, 5 sets").model, "RV-2000");
+});

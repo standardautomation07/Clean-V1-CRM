@@ -52,10 +52,11 @@ export function PrivacyPolicy() {
       </p>
       <p>
         Replies are drafted in the system but are <strong>only sent after a member of our team reviews and approves
-        them</strong>, with one exception: if you enquire about a specific product without telling us how many you
-        need, we send back an automatic menu asking for the quantity. That menu is fixed text, is sent only in reply
-        to your own message, and is the only message you will ever receive from us without a person having approved
-        it.
+        them</strong>, with two exceptions. If you enquire about a specific product without telling us how many you
+        need, we send back an automatic menu asking for the quantity; once you answer it, we send a short
+        acknowledgement confirming our team will contact you. Both are fixed text, are sent only in reply to your own
+        message, contain no prices, and are the only messages you will ever receive from us without a person having
+        approved them.
       </p>
       <p>
         WhatsApp messages are delivered through the WhatsApp Business Platform operated by Meta, and Meta&rsquo;s own

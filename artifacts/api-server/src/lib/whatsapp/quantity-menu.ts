@@ -66,6 +66,20 @@ export function buildQuantityMenu(to: string, model: string): InteractivePayload
   };
 }
 
+/**
+ * The acknowledgement sent once the customer has told us how many they need.
+ *
+ * Deliberately the same sentence for every enquiry, whatever was asked about.
+ * An earlier version varied the reply by guessed intent and got it wrong in
+ * front of customers; a person qualifies every enquiry anyway, so guessing adds
+ * risk without adding value. The analysis still reaches the salesperson — only
+ * the customer-facing text is fixed.
+ */
+export function acknowledgement(name?: string | null): string {
+  const greeting = name?.trim() ? `Hi ${name.trim()}, ` : "";
+  return `${greeting}thank you for contacting Rollvento. Our team will reach out to you shortly.`;
+}
+
 /** The quantity a customer tapped, or null if this is not a menu reply. */
 export function readQuantityReply(message: unknown): { quantity: number | null; title: string } | null {
   const interactive = (message as { interactive?: { type?: string; list_reply?: { id?: string; title?: string } } })?.interactive;

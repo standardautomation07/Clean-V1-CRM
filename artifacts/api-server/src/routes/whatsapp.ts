@@ -2,25 +2,22 @@ import { and, desc, eq, isNull, or } from "drizzle-orm";
 import { db, leadsTable, usersTable, whatsappMessagesTable, activitiesTable } from "@workspace/db";
 import { getNovaTool } from "../lib/nova/tools";
 import { parseProductEnquiry } from "../lib/whatsapp/product-enquiry";
-import { buildQuantityMenu, readQuantityReply } from "../lib/whatsapp/quantity-menu";
+import { acknowledgement, buildQuantityMenu, readQuantityReply } from "../lib/whatsapp/quantity-menu";
 
 /**
  * Sends the quantity menu and records it like any other outbound message, so
  * it appears in the conversation and a failure is visible rather than silent.
  * Never throws: a webhook must still be acknowledged if Meta rejects the menu.
  */
-async function sendQuantityMenu(
-  phone: string,
-  model: string,
-  ownerId: string | null,
-  leadId: number | null,
+async function postToWhatsapp(
+  payload: Record<string, unknown>,
+  record: { phone: string; ownerId: string | null; leadId: number | null; messageType: string; body: string },
   req: { log: { warn: (o: unknown, m: string) => void } },
 ): Promise<void> {
   const token = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
-  if (!token || !phoneNumberId || !ownerId) return;
+  if (!token || !phoneNumberId || !record.ownerId) return;
   const version = process.env.WHATSAPP_GRAPH_VERSION?.trim() || "v23.0";
-  const payload = buildQuantityMenu(phone, model);
   try {
     const response = await fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`, {
       method: "POST",
@@ -28,22 +25,49 @@ async function sendQuantityMenu(
       body: JSON.stringify(payload),
     });
     const result = (await response.json().catch(() => ({}))) as { messages?: Array<{ id?: string }>; error?: { message?: string } };
-    const waId = String(result?.messages?.[0]?.id ?? `qty-menu-${Date.now()}`);
     await db.insert(whatsappMessagesTable).values({
-      ownerId,
-      leadId,
+      ownerId: record.ownerId,
+      leadId: record.leadId,
       direction: "Outbound",
       status: response.ok ? "Sent" : "Failed",
-      waMessageId: waId,
-      phone,
-      messageType: "interactive",
-      body: `Quantity menu sent for ${model}`,
+      waMessageId: String(result?.messages?.[0]?.id ?? `auto-${Date.now()}-${Math.random().toString(36).slice(2)}`),
+      phone: record.phone,
+      messageType: record.messageType,
+      body: record.body,
       payload: result,
     });
-    if (!response.ok) req.log.warn({ model, error: result?.error?.message }, "Quantity menu could not be sent");
+    if (!response.ok) req.log.warn({ body: record.body, error: result?.error?.message }, "Automatic WhatsApp message could not be sent");
   } catch (error) {
-    req.log.warn({ model, error: String(error) }, "Quantity menu could not be sent");
+    req.log.warn({ body: record.body, error: String(error) }, "Automatic WhatsApp message could not be sent");
   }
+}
+
+async function sendQuantityMenu(
+  phone: string,
+  model: string,
+  ownerId: string | null,
+  leadId: number | null,
+  req: { log: { warn: (o: unknown, m: string) => void } },
+): Promise<void> {
+  await postToWhatsapp(
+    buildQuantityMenu(phone, model) as unknown as Record<string, unknown>,
+    { phone, ownerId, leadId, messageType: "interactive", body: `Quantity menu sent for ${model}` },
+    req,
+  );
+}
+
+async function sendAutomatic(
+  phone: string,
+  text: string,
+  ownerId: string | null,
+  leadId: number | null,
+  req: { log: { warn: (o: unknown, m: string) => void } },
+): Promise<void> {
+  await postToWhatsapp(
+    { messaging_product: "whatsapp", to: phone, type: "text", text: { preview_url: false, body: text } },
+    { phone, ownerId, leadId, messageType: "text", body: text },
+    req,
+  );
 }
 import { Router, type IRouter } from "express";
 import crypto from "node:crypto";
@@ -172,6 +196,16 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
         const enquiry = parseProductEnquiry(body);
         if (enquiry.model && enquiry.quantity === null && !tapped) {
           await sendQuantityMenu(phone, enquiry.model, ownerId, lead?.id ?? null, req);
+        } else if (tapped) {
+          // They have told us how many. Close the loop so the customer knows
+          // the enquiry reached a person, then it waits in the inbox.
+          await sendAutomatic(
+            phone,
+            acknowledgement(profileName(value, phone)),
+            ownerId,
+            lead?.id ?? null,
+            req,
+          );
         }
 
         accepted += 1;

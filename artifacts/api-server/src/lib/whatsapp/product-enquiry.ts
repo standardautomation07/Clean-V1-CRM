@@ -23,26 +23,38 @@ export interface ProductEnquiry {
 
 const QUANTITY_UNITS = ["sets", "set", "nos", "no", "pcs", "pieces", "piece", "units", "unit", "pairs", "pair"];
 
-/** Longest models first, so SL1000ACW is not matched as SL1000AC. */
+/**
+ * Longest models first, so SL1000ACW is not matched as SL1000AC. Compared on
+ * alphanumerics only, because RV-400 and RV400 are the same length of model
+ * written two ways.
+ */
 function modelsByLength(): string[] {
+  const significant = (model: string) => model.replace(/[^A-Za-z0-9]/g, "").length;
   return loadRollventoProducts()
     .map((product) => product.model)
     .filter(Boolean)
-    .sort((a, b) => b.length - a.length);
+    .sort((a, b) => significant(b) - significant(a));
+}
+
+/**
+ * Models are written loosely by customers: RV-400 arrives as "RV400", "rv 400"
+ * or "RV 400". So each model becomes a pattern whose own separators are
+ * optional, anchored so it cannot match inside a longer run of letters or
+ * digits — an order reference must never be read as a product.
+ */
+function modelPattern(model: string): RegExp {
+  const parts = model.toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean).map(escapeRegex);
+  return new RegExp(`(?<![A-Z0-9])${parts.join("[\\s\\-_.]*")}(?![A-Z0-9])`);
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function findModel(text: string): string | null {
   const haystack = text.toUpperCase();
   for (const model of modelsByLength()) {
-    const needle = model.toUpperCase();
-    const at = haystack.indexOf(needle);
-    if (at === -1) continue;
-    // A model must not be part of a longer alphanumeric run, so "SL600AC" does
-    // not match inside an order reference like "XSL600ACZ".
-    const before = haystack[at - 1];
-    const after = haystack[at + needle.length];
-    const boundary = (c: string | undefined) => c === undefined || !/[A-Z0-9]/.test(c);
-    if (boundary(before) && boundary(after)) return model;
+    if (modelPattern(model).test(haystack)) return model;
   }
   return null;
 }
