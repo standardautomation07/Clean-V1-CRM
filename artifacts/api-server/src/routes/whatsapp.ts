@@ -1,6 +1,7 @@
 import { and, desc, eq, isNull, or } from "drizzle-orm";
 import { db, leadsTable, usersTable, whatsappMessagesTable, activitiesTable } from "@workspace/db";
 import { getNovaTool } from "../lib/nova/tools";
+import { parseProductEnquiry } from "../lib/whatsapp/product-enquiry";
 import { Router, type IRouter } from "express";
 import crypto from "node:crypto";
 
@@ -86,34 +87,14 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
         const ownerId = existingLead?.ownerId ?? (await resolveInboxOwnerId());
         const body = message?.type === "text" ? String(message?.text?.body ?? "") : "";
 
-        // First contact from an unknown number becomes a lead, so the message
-        // has somewhere to live and NOVA can interpret it: every NOVA WhatsApp
-        // tool is scoped to a lead, so a message without one is a dead end.
-        // Requires an owner, because leads.owner_id is NOT NULL.
-        let lead = existingLead;
-        let leadCreated = false;
-        if (!lead && ownerId) {
-          const name = profileName(value, phone);
-          const [created] = await db.insert(leadsTable).values({
-            companyName: name,
-            contactName: name,
-            phone,
-            email: "",
-            source: "WhatsApp",
-            requirement: body.slice(0, 2000),
-            status: "New",
-            notes: `Created automatically from an inbound WhatsApp message from +${phone}.`,
-            ownerId,
-          }).returning();
-          lead = created;
-          leadCreated = true;
-          await db.insert(activitiesTable).values({
-            leadId: created.id,
-            createdBy: ownerId,
-            type: "LeadCreated",
-            description: `Lead created from an inbound WhatsApp message from +${phone}.`,
-          });
-        }
+        // A message from an unknown number is held as an enquiry rather than
+        // becoming a lead on arrival. The website funnels real traffic at this
+        // number, so wrong numbers and spam would otherwise land straight in
+        // the leads list. A person converts it from the NOVA inbox instead.
+        //
+        // A number that already belongs to a lead still attaches to it, so an
+        // ongoing conversation stays in one place and can be replied to.
+        const lead = existingLead;
         const [saved] = await db.insert(whatsappMessagesTable).values({
           ownerId,
           leadId: lead?.id ?? null,
@@ -135,7 +116,7 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
           });
         }
         accepted += 1;
-        if (leadCreated) req.log.info({ leadId: lead?.id }, "WhatsApp inbound created a lead");
+        if (!lead) req.log.info({ messageId: saved.id }, "WhatsApp enquiry awaiting conversion to a lead");
       }
     }
   }
@@ -156,6 +137,68 @@ router.get("/whatsapp/inbox", async (req, res): Promise<void> => {
     .orderBy(desc(whatsappMessagesTable.createdAt))
     .limit(100);
   res.json({ messages: rows });
+});
+
+// Converting a held enquiry into a lead. This is the human step: the website
+// sends real traffic to this number, so a person decides what becomes a lead.
+router.post("/whatsapp/messages/:id/convert-lead", async (req, res): Promise<void> => {
+  if (!req.isAuthenticated()) {
+    res.status(401).json({ error: "Authentication required" });
+    return;
+  }
+  const ownerId = req.user.id;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: "Invalid message id" });
+    return;
+  }
+
+  const [message] = await db.select().from(whatsappMessagesTable).where(eq(whatsappMessagesTable.id, id));
+  if (!message) {
+    res.status(404).json({ error: "Message not found" });
+    return;
+  }
+  if (message.leadId) {
+    res.status(409).json({ error: "This message already belongs to a lead", leadId: message.leadId });
+    return;
+  }
+
+  // The number may have become a lead since the message arrived, through
+  // another enquiry or by hand. Reuse it rather than creating a duplicate.
+  const existing = await findLeadByPhone(message.phone);
+  const enquiry = parseProductEnquiry(message.body);
+  const body = (req.body ?? {}) as { companyName?: string; contactName?: string };
+  const name = String(body.companyName ?? "").trim() || profileName(message.payload, message.phone);
+
+  const lead = existing ?? (await db.insert(leadsTable).values({
+    companyName: name,
+    contactName: String(body.contactName ?? "").trim() || name,
+    phone: message.phone,
+    email: "",
+    source: "WhatsApp",
+    // The parsed enquiry when we could read one, so the quotation can be
+    // started from it; otherwise the message itself, which is better than
+    // nothing for the salesperson picking it up.
+    requirement: (enquiry.requirement ?? message.body).slice(0, 2000),
+    status: "New",
+    notes: `Created from a WhatsApp enquiry from +${message.phone}.`,
+    ownerId,
+  }).returning())[0];
+
+  await db.update(whatsappMessagesTable)
+    .set({ leadId: lead.id, ownerId: lead.ownerId })
+    .where(eq(whatsappMessagesTable.id, id));
+
+  await db.insert(activitiesTable).values({
+    leadId: lead.id,
+    createdBy: ownerId,
+    type: existing ? "WhatsApp" : "LeadCreated",
+    description: existing
+      ? `WhatsApp enquiry attached to this lead: ${(enquiry.requirement ?? message.body).slice(0, 400)}`
+      : `Lead created from a WhatsApp enquiry: ${(enquiry.requirement ?? message.body).slice(0, 400)}`,
+  });
+
+  res.status(201).json({ ok: true, lead, enquiry, reusedExistingLead: Boolean(existing) });
 });
 
 // Why this exists: inbound webhooks were not arriving and every setting in
