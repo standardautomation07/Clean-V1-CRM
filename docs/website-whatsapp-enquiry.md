@@ -78,3 +78,19 @@ before WhatsApp opens.
 Open a product page on a phone, pick a quantity, press the button, send. The
 enquiry should appear in NOVA → WhatsApp inbox within a few seconds, showing
 the model and quantity, with **Convert to lead** beside it.
+
+## If the customer does not set a quantity
+
+The website picker is the fast path, but people also share a bare product link,
+or type their own message. When an enquiry names a product and no quantity, the
+CRM replies inside WhatsApp with a **tappable quantity menu** — 1, 2, 5, 10, 25,
+50, 100, plus "a different quantity" — and the tapped answer comes back as a
+normal message.
+
+That menu is the only message the system sends without a person approving it.
+It is fixed text, goes only to someone who has just messaged first, and fires
+only when a product was recognised with no quantity, so it cannot interrupt an
+ordinary conversation. The privacy policy says so explicitly.
+
+Both routes end in the same place: model and quantity on the lead's
+requirement, ready to quote.

@@ -2,6 +2,49 @@ import { and, desc, eq, isNull, or } from "drizzle-orm";
 import { db, leadsTable, usersTable, whatsappMessagesTable, activitiesTable } from "@workspace/db";
 import { getNovaTool } from "../lib/nova/tools";
 import { parseProductEnquiry } from "../lib/whatsapp/product-enquiry";
+import { buildQuantityMenu, readQuantityReply } from "../lib/whatsapp/quantity-menu";
+
+/**
+ * Sends the quantity menu and records it like any other outbound message, so
+ * it appears in the conversation and a failure is visible rather than silent.
+ * Never throws: a webhook must still be acknowledged if Meta rejects the menu.
+ */
+async function sendQuantityMenu(
+  phone: string,
+  model: string,
+  ownerId: string | null,
+  leadId: number | null,
+  req: { log: { warn: (o: unknown, m: string) => void } },
+): Promise<void> {
+  const token = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID?.trim();
+  if (!token || !phoneNumberId || !ownerId) return;
+  const version = process.env.WHATSAPP_GRAPH_VERSION?.trim() || "v23.0";
+  const payload = buildQuantityMenu(phone, model);
+  try {
+    const response = await fetch(`https://graph.facebook.com/${version}/${phoneNumberId}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const result = (await response.json().catch(() => ({}))) as { messages?: Array<{ id?: string }>; error?: { message?: string } };
+    const waId = String(result?.messages?.[0]?.id ?? `qty-menu-${Date.now()}`);
+    await db.insert(whatsappMessagesTable).values({
+      ownerId,
+      leadId,
+      direction: "Outbound",
+      status: response.ok ? "Sent" : "Failed",
+      waMessageId: waId,
+      phone,
+      messageType: "interactive",
+      body: `Quantity menu sent for ${model}`,
+      payload: result,
+    });
+    if (!response.ok) req.log.warn({ model, error: result?.error?.message }, "Quantity menu could not be sent");
+  } catch (error) {
+    req.log.warn({ model, error: String(error) }, "Quantity menu could not be sent");
+  }
+}
 import { Router, type IRouter } from "express";
 import crypto from "node:crypto";
 
@@ -85,7 +128,14 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
 
         const existingLead = await findLeadByPhone(phone);
         const ownerId = existingLead?.ownerId ?? (await resolveInboxOwnerId());
-        const body = message?.type === "text" ? String(message?.text?.body ?? "") : "";
+        // A tapped menu option carries its label, so the chosen quantity reads
+        // as text in the inbox rather than as an opaque interactive payload.
+        const tapped = readQuantityReply(message);
+        const body = message?.type === "text"
+          ? String(message?.text?.body ?? "")
+          : tapped
+            ? `Quantity: ${tapped.title}`
+            : "";
 
         // A message from an unknown number is held as an enquiry rather than
         // becoming a lead on arrival. The website funnels real traffic at this
@@ -115,6 +165,15 @@ router.post("/whatsapp/webhook", async (req, res): Promise<void> => {
             description: body ? `Inbound WhatsApp: ${body.slice(0, 500)}` : `Inbound WhatsApp message received (${message?.type ?? "unknown"}).`,
           });
         }
+        // The quantity menu. The customer asked about a product but did not say
+        // how many, and their message has just opened the 24-hour window, so
+        // this is the moment to ask. See lib/whatsapp/quantity-menu for why
+        // this is the only message sent without human approval.
+        const enquiry = parseProductEnquiry(body);
+        if (enquiry.model && enquiry.quantity === null && !tapped) {
+          await sendQuantityMenu(phone, enquiry.model, ownerId, lead?.id ?? null, req);
+        }
+
         accepted += 1;
         if (!lead) req.log.info({ messageId: saved.id }, "WhatsApp enquiry awaiting conversion to a lead");
       }
@@ -166,7 +225,28 @@ router.post("/whatsapp/messages/:id/convert-lead", async (req, res): Promise<voi
   // The number may have become a lead since the message arrived, through
   // another enquiry or by hand. Reuse it rather than creating a duplicate.
   const existing = await findLeadByPhone(message.phone);
-  const enquiry = parseProductEnquiry(message.body);
+  // The model and the quantity arrive as two messages: the enquiry, then the
+  // menu option they tapped. Read the recent conversation from this number so
+  // the lead carries both, rather than whichever message was clicked.
+  const recent = await db
+    .select({ body: whatsappMessagesTable.body })
+    .from(whatsappMessagesTable)
+    .where(and(eq(whatsappMessagesTable.phone, message.phone), eq(whatsappMessagesTable.direction, "Inbound")))
+    .orderBy(desc(whatsappMessagesTable.createdAt))
+    .limit(10);
+  const enquiry = recent
+    .map((row) => parseProductEnquiry(row.body))
+    .reduce((merged, one) => ({
+      model: merged.model ?? one.model,
+      productName: merged.productName ?? one.productName,
+      quantity: merged.quantity ?? one.quantity,
+      unit: merged.unit ?? one.unit,
+      requirement: null,
+    }), parseProductEnquiry(message.body));
+  enquiry.requirement = [
+    enquiry.model ? (enquiry.productName ? `${enquiry.model} — ${enquiry.productName}` : enquiry.model) : "",
+    enquiry.quantity !== null ? `Quantity: ${enquiry.quantity}${enquiry.unit ? ` ${enquiry.unit}` : ""}` : "",
+  ].filter(Boolean).join(" · ") || null;
   const body = (req.body ?? {}) as { companyName?: string; contactName?: string };
   const name = String(body.companyName ?? "").trim() || profileName(message.payload, message.phone);
 
