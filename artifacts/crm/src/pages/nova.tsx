@@ -104,6 +104,26 @@ export function NovaCommandCenter() {
     } finally { setInboxLoading(false); }
   }
 
+  async function convertToLead(message: WhatsappMessage) {
+    setRunning(true);
+    try {
+      const response = await fetch(`/api/whatsapp/messages/${message.id}/convert-lead`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await response.json();
+      setResult(data);
+      if (response.ok) {
+        await loadInbox();
+        setSelectedMessage({ ...message, leadId: data.lead?.id ?? null });
+      }
+    } finally {
+      setRunning(false);
+    }
+  }
+
   async function interpretMessage(message: WhatsappMessage) {
     if (!message.leadId || !message.body) return;
     setSelectedMessage(message);
@@ -658,6 +678,20 @@ export function NovaCommandCenter() {
           {selectedMessage ? <>
             <div className="text-xs font-semibold">Selected message</div>
             <p className="mt-2 whitespace-pre-wrap rounded-lg bg-muted/40 p-3 text-xs">{selectedMessage.body || `[${selectedMessage.messageType} message]`}</p>
+            {/* An enquiry from an unknown number is not a lead until someone
+                says so, so replying is held behind the same decision. */}
+            {!selectedMessage.leadId && selectedMessage.direction === "Inbound" && (
+              <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3">
+                <p className="text-[11px] font-semibold text-amber-900 dark:text-amber-200">Enquiry — not yet a lead</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-amber-900/90 dark:text-amber-200/90">
+                  This number is not in your CRM. Converting it creates the lead, carries the product and quantity into
+                  the requirement, and lets you reply and quote.
+                </p>
+                <Button className="mt-2" size="sm" disabled={running} onClick={() => convertToLead(selectedMessage)} data-testid="button-convert-enquiry">
+                  <Users className="size-3" />Convert to lead
+                </Button>
+              </div>
+            )}
             {selectedMessage.direction === "Inbound" && <Button className="mt-3" size="sm" variant="outline" disabled={running || !selectedMessage.leadId || !selectedMessage.body} onClick={() => interpretMessage(selectedMessage)}><Sparkles className="size-3" />Draft suggested reply</Button>}
             {replyAction && <p className="mt-3 text-[11px] text-muted-foreground"><strong>Suggested next action:</strong> {replyAction}</p>}
             {replyDraft && <>

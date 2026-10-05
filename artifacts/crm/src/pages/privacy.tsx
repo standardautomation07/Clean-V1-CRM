@@ -8,7 +8,7 @@
 // true of the code: data is kept per owner, WhatsApp replies require human
 // approval, and nothing is sold or shared for advertising.
 
-const UPDATED = '3 October 2026';
+const UPDATED = '5 October 2026';
 
 export function PrivacyPolicy() {
   return <main className="mx-auto max-w-3xl px-4 py-12 md:py-16">
@@ -48,10 +48,18 @@ export function PrivacyPolicy() {
     <Section title="WhatsApp messages">
       <p>
         If you message our WhatsApp business number, your message and phone number are stored in our CRM so our team
-        can respond and keep the conversation in one place. Replies are drafted in the system but are
-        <strong> only sent after a member of our team reviews and approves them</strong>; nothing is sent to you
-        automatically. WhatsApp messages are delivered through the WhatsApp Business Platform operated by Meta, and
-        Meta&rsquo;s own terms and privacy policy apply to that delivery.
+        can respond and keep the conversation in one place.
+      </p>
+      <p>
+        Replies are drafted in the system but are <strong>only sent after a member of our team reviews and approves
+        them</strong>, with one exception: if you enquire about a specific product without telling us how many you
+        need, we send back an automatic menu asking for the quantity. That menu is fixed text, is sent only in reply
+        to your own message, and is the only message you will ever receive from us without a person having approved
+        it.
+      </p>
+      <p>
+        WhatsApp messages are delivered through the WhatsApp Business Platform operated by Meta, and Meta&rsquo;s own
+        terms and privacy policy apply to that delivery.
       </p>
     </Section>
 
